@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Debater": {
+      "title": "Debater",
+      "description": "A professional debater in the fantasy league.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number", "description": "Current market value of the debater." },
+        "totalPoints": { "type": "number" },
+        "lastRoundPoints": { "type": "number" },
+        "bio": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    },
+    "Round": {
+      "title": "Round",
+      "description": "A specific debate round with a topic and deadline.",
+      "type": "object",
+      "properties": {
+        "roundNumber": { "type": "number" },
+        "topic": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time", "description": "Lock teams by this time." },
+        "status": { "type": "string", "enum": ["upcoming", "active", "completed"] },
+        "winnerSide": { "type": "string", "enum": ["Government", "Opposition", "Draw"] }
+      },
+      "required": ["roundNumber", "topic", "deadline", "status"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A user's fantasy debate team.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "debaterIds": { "type": "array", "items": { "type": "string" } },
+        "budgetSpent": { "type": "number" },
+        "totalPoints": { "type": "number" },
+        "locked": { "type": "boolean" }
+      },
+      "required": ["userId", "debaterIds"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Public profile and league standing.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "totalPoints": { "type": "number" },
+        "isAdmin": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/debaters/{debaterId}": {
+      "schema": "Debater",
+      "description": "Available debaters for drafting."
+    },
+    "/rounds/{roundId}": {
+      "schema": "Round",
+      "description": "Debate rounds and schedules."
+    },
+    "/teams/{userId}": {
+      "schema": "Team",
+      "description": "User specific team selection."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile data."
+    }
+  }
+}

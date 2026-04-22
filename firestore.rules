@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        request.auth.token.email == 'sweatycoiner@gmail.com'
+      ); 
+    }
+    function isBootstrapAdmin() { return isSignedIn() && request.auth.token.email == 'sweatycoiner@gmail.com'; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Connectivity check path ---
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // --- Debaters ---
+    function isValidDebater(data) {
+      return (data.get('name', '') is string) && (data.get('name', '').size() > 0)
+        && (data.get('team', 'A') in ['A', 'B'])
+        && (data.get('price', 0) is number)
+        && (data.get('totalPoints', 0) is number)
+        && (data.get('lastRoundPoints', 0) is number)
+        && (data.get('bio', '') is string)
+        && (data.get('imageUrl', '') is string);
+    }
+
+    match /debaters/{debaterId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidDebater(incoming()) && isValidId(debaterId);
+      allow update: if isAdmin() && isValidDebater(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // --- Rounds ---
+    function isValidRound(data) {
+      return (data.get('roundNumber', 0) is number)
+        && (data.get('topic', '') is string)
+        && (data.get('deadline', '') is string)
+        && (data.get('status', 'upcoming') in ['upcoming', 'active', 'completed']);
+    }
+
+    match /rounds/{roundId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidRound(incoming()) && isValidId(roundId);
+      allow update: if isAdmin() && isValidRound(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // --- Votes (Debater of the Day) ---
+    match /votes/{userId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() 
+        && request.auth.uid == userId 
+        && get(/databases/$(database)/documents/state/lock).data.get('isVotingOpen', false) == true
+        && incoming().debaterId is string;
+      allow delete: if isAdmin();
+    }
+
+    // --- Teams ---
+    function isRoundLocked() {
+      return exists(/databases/$(database)/documents/state/lock) && get(/databases/$(database)/documents/state/lock).data.isLocked == true;
+    }
+
+    function isValidTeam(data) {
+      return data.userId == request.auth.uid
+        && data.debaterIds is list && data.debaterIds.size() <= 3;
+    }
+
+    match /teams/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidTeam(incoming()) && !isRoundLocked();
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidTeam(incoming()) && !isRoundLocked();
+      allow delete: if isAdmin();
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+    }
+
+    // --- Admin List ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isBootstrapAdmin() || isAdmin();
+    }
+
+    // --- System State ---
+    match /state/lock {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
