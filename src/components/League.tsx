@@ -1,20 +1,32 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { UserProfile } from '../types';
-import { Trophy, Medal, Crown } from 'lucide-react';
-import { motion } from 'motion/react';
+import { UserProfile, Team, Debater } from '../types';
+import { Trophy, Medal, Crown, ChevronDown, ChevronUp, Star } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export default function League() {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [debaters, setDebaters] = useState<Debater[]>([]);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('totalPoints', 'desc'), limit(50));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsubU = onSnapshot(q, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
     });
-    return () => unsub();
+
+    const unsubT = onSnapshot(collection(db, 'teams'), (snapshot) => {
+       setTeams(snapshot.docs.map(doc => ({ ...doc.data() } as Team)));
+    });
+
+    const unsubD = onSnapshot(collection(db, 'debaters'), (snapshot) => {
+       setDebaters(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Debater)));
+    });
+
+    return () => { unsubU(); unsubT(); unsubD(); };
   }, []);
 
   return (
@@ -77,32 +89,84 @@ export default function League() {
                </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-               {users.map((user, idx) => (
-                 <tr key={user.uid} className="hover:bg-slate-950/50 transition-colors group">
-                    <td className="px-6 py-4">
-                       <span className={cn(
-                         "font-mono font-bold",
-                         idx < 3 ? "text-indigo-400" : "text-slate-500"
-                       )}>
-                          #{idx + 1}
-                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                       <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                            idx < 3 ? "bg-indigo-600 shadow-lg shadow-indigo-600/20" : "bg-slate-800"
+               {users.map((user, idx) => {
+                 const team = teams.find(t => t.userId === user.uid);
+                 const userDebaters = team?.debaterIds.map(id => debaters.find(d => d.id === id)).filter(Boolean) as Debater[];
+                 const isExpanded = expandedUser === user.uid;
+
+                 return (
+                  <React.Fragment key={user.uid}>
+                    <tr 
+                      onClick={() => setExpandedUser(isExpanded ? null : user.uid)}
+                      className={cn(
+                        "hover:bg-slate-950/50 transition-colors group cursor-pointer",
+                        isExpanded && "bg-slate-950/50"
+                      )}
+                    >
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "font-mono font-bold",
+                            idx < 3 ? "text-indigo-400" : "text-slate-500"
                           )}>
-                             {user.displayName[0]}
+                              #{idx + 1}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                                  idx < 3 ? "bg-indigo-600 shadow-lg shadow-indigo-600/20" : "bg-slate-800"
+                                )}>
+                                  {user.displayName[0]}
+                                </div>
+                                <span className="font-semibold">{user.displayName}</span>
+                            </div>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
                           </div>
-                          <span className="font-semibold">{user.displayName}</span>
-                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                       <span className="font-mono font-bold text-indigo-400">{user.totalPoints}</span>
-                    </td>
-                 </tr>
-               ))}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <span className="font-mono font-bold text-indigo-400">{user.totalPoints}</span>
+                        </td>
+                    </tr>
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-0">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pb-6 pt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                {userDebaters && userDebaters.length > 0 ? (
+                                  userDebaters.map(debater => (
+                                    <div key={debater.id} className="bg-slate-950 border border-slate-800/50 p-2 rounded-xl flex items-center justify-between">
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-bold">{debater.name}</span>
+                                        <span className="text-[10px] text-slate-500">Team {debater.team}</span>
+                                      </div>
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[10px] font-mono text-indigo-400">{debater.totalPoints} PTS</span>
+                                        <span className="text-[10px] text-slate-600">${debater.price}</span>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="col-span-full py-4 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-950/50 rounded-xl border border-dashed border-slate-800">
+                                    No squad selected
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          </td>
+                        </tr>
+                      )}
+                    </AnimatePresence>
+                  </React.Fragment>
+                 );
+               })}
             </tbody>
          </table>
       </div>

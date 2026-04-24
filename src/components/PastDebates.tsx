@@ -59,7 +59,7 @@ export default function PastDebates() {
                           Outcome: <span className={cn(
                             round.winnerSide === 'Government' ? 'text-indigo-400' : 
                             round.winnerSide === 'Opposition' ? 'text-amber-400' : 'text-slate-400'
-                          )}>{round.winnerSide}</span>
+                          )}>{round.winnerSide === 'Government' ? 'Team A' : round.winnerSide === 'Opposition' ? 'Team B' : round.winnerSide}</span>
                        </p>
                     </div>
                  </div>

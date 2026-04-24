@@ -42,7 +42,7 @@ export default function Rankings() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Team Standings & Rankings</h2>
-          <p className="text-slate-400">Fixed rosters: Government vs Opposition global performance.</p>
+          <p className="text-slate-400">Fixed rosters: Team A vs Team B global performance.</p>
         </div>
       </header>
 
@@ -53,7 +53,7 @@ export default function Rankings() {
          <div className="relative z-10 grid grid-cols-1 md:grid-cols-7 items-center gap-6 md:gap-8">
             {/* Team A Points */}
             <div className="md:col-span-3 text-center space-y-4">
-               <span className="text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase text-indigo-400 bg-indigo-400/10 px-4 py-1.5 rounded-full border border-indigo-400/20">Government (Team A)</span>
+               <span className="text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase text-indigo-400 bg-indigo-400/10 px-4 py-1.5 rounded-full border border-indigo-400/20">Team A</span>
                <div className="flex flex-col items-center">
                   <span className="text-5xl md:text-7xl font-mono font-black text-white tracking-widest">{statsA.totalPoints}</span>
                   <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase mt-1">Total Team Points</p>
@@ -79,7 +79,7 @@ export default function Rankings() {
 
             {/* Team B Points */}
             <div className="md:col-span-3 text-center space-y-4">
-               <span className="text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase text-amber-400 bg-amber-400/10 px-4 py-1.5 rounded-full border border-amber-400/20">Opposition (Team B)</span>
+               <span className="text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase text-amber-400 bg-amber-400/10 px-4 py-1.5 rounded-full border border-amber-400/20">Team B</span>
                <div className="flex flex-col items-center">
                   <span className="text-5xl md:text-7xl font-mono font-black text-white tracking-widest">{statsB.totalPoints}</span>
                   <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase mt-1">Total Team Points</p>
@@ -164,7 +164,7 @@ export default function Rankings() {
                                     <span className={cn(
                                        "text-[10px] font-black uppercase tracking-widest",
                                        d.team === 'A' ? "text-indigo-400" : "text-amber-400"
-                                    )}>Team {d.team} ({d.team === 'A' ? 'Gov' : 'Opp'})</span>
+                                    )}>Team {d.team}</span>
                                  </div>
                               </div>
                            </td>

@@ -4,8 +4,8 @@ import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, 
   query, orderBy, getDocs, writeBatch, getDoc, increment
 } from 'firebase/firestore';
-import { Debater, Round, SystemState, Team } from '../types';
-import { Plus, Trash2, Save, Send, Lock, Unlock, TrendingUp, UserPlus, CalendarPlus, Calendar, Star, Vote } from 'lucide-react';
+import { Debater, Round, SystemState, Team, UserProfile } from '../types';
+import { Plus, Trash2, Save, Send, Lock, Unlock, TrendingUp, UserPlus, CalendarPlus, Calendar, Star, Vote, Users, Shield } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
 import DatePicker from 'react-datepicker';
@@ -14,18 +14,22 @@ import "react-datepicker/dist/react-datepicker.css";
 export default function AdminPanel() {
   const [debaters, setDebaters] = useState<Debater[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [state, setState] = useState<SystemState | null>(null);
-  const [activeSection, setActiveSection] = useState<'debaters' | 'rounds' | 'results' | 'voting'>('debaters');
+  const [activeSection, setActiveSection] = useState<'debaters' | 'rounds' | 'results' | 'voting' | 'users'>('debaters');
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     const unsubD = onSnapshot(collection(db, 'debaters'), (s) => setDebaters(s.docs.map(d => ({id: d.id, ...d.data()} as Debater))));
     const unsubR = onSnapshot(query(collection(db, 'rounds'), orderBy('roundNumber', 'desc')), (s) => setRounds(s.docs.map(d => ({id: d.id, ...d.data()} as Round))));
+    const unsubU = onSnapshot(collection(db, 'users'), (s) => setUsers(s.docs.map(d => ({...d.data()} as UserProfile))));
+    const unsubT = onSnapshot(collection(db, 'teams'), (s) => setTeams(s.docs.map(d => ({...d.data()} as Team))));
     const unsubS = onSnapshot(doc(db, 'state', 'lock'), (s) => {
       if (s.exists()) setState(s.data() as SystemState);
       else setState({ isLocked: false, currentRoundId: '', initialBudget: 50 });
     });
-    return () => { unsubD(); unsubR(); unsubS(); };
+    return () => { unsubD(); unsubR(); unsubU(); unsubT(); unsubS(); };
   }, []);
 
   const addDebater = async () => {
@@ -95,7 +99,7 @@ export default function AdminPanel() {
       for (const [id, score] of Object.entries(scores)) {
         const d = debaters.find(deb => deb.id === id);
         if (d) {
-          const nextPrice = Math.max(1, d.price + (score * 0.2));
+          const nextPrice = Math.max(1, d.price + (score * 0.01));
           batch.update(doc(db, 'debaters', id), {
             totalPoints: increment(score),
             lastRoundPoints: score,
@@ -157,7 +161,7 @@ export default function AdminPanel() {
         const diff = newScore - oldScore;
 
         if (diff !== 0) {
-          const nextPrice = Math.max(1, d.price + (diff * 0.2));
+          const nextPrice = Math.max(1, d.price + (diff * 0.01));
           batch.update(doc(db, 'debaters', d.id), {
             totalPoints: increment(diff),
             lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
@@ -221,6 +225,69 @@ export default function AdminPanel() {
     }
   };
 
+  const deleteUser = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to delete this account? This will remove their profile and squad.')) return;
+    try {
+      setIsProcessing(true);
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'users', userId));
+      batch.delete(doc(db, 'teams', userId));
+      // Also check if admin
+      batch.delete(doc(db, 'admins', userId));
+      
+      await batch.commit();
+      toast.success('Account deleted successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete account');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const updateUser = async (user: UserProfile, walletBalance: number) => {
+    try {
+      setIsProcessing(true);
+      const batch = writeBatch(db);
+      
+      // Update User Profile
+      batch.update(doc(db, 'users', user.uid), {
+        totalPoints: user.totalPoints,
+        displayName: user.displayName,
+        isAdmin: user.isAdmin
+      });
+
+      // Sync with Admins collection for security rules
+      const adminRef = doc(db, 'admins', user.uid);
+      if (user.isAdmin) {
+        batch.set(adminRef, { email: user.email, addedAt: new Date().toISOString() }, { merge: true });
+      } else {
+        // Only delete if it's not the bootstrap admin
+        if (user.email !== 'sweatycoiner@gmail.com') {
+          batch.delete(adminRef);
+        }
+      }
+
+      // Sync with Team points & walletBalance (if team exists)
+      const teamRef = doc(db, 'teams', user.uid);
+      const teamSnap = await getDoc(teamRef);
+      if (teamSnap.exists()) {
+        batch.update(teamRef, {
+          totalPoints: user.totalPoints,
+          walletBalance: walletBalance
+        });
+      }
+
+      await batch.commit();
+      toast.success('User updated and synced!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update user');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col sm:flex-row justify-between items-center bg-indigo-600 rounded-3xl p-6 md:p-8 text-white shadow-2xl relative overflow-hidden gap-4">
@@ -255,7 +322,7 @@ export default function AdminPanel() {
       </header>
 
       <div className="flex gap-2 md:gap-4 border-b border-slate-800 overflow-x-auto pb-px no-scrollbar">
-         {(['debaters', 'rounds', 'results', 'voting'] as const).map(tab => (
+         {(['debaters', 'rounds', 'users', 'voting'] as const).map(tab => (
            <button 
              key={tab}
              type="button"
@@ -271,6 +338,22 @@ export default function AdminPanel() {
       </div>
 
       <div className="min-h-[400px]">
+         {activeSection === 'users' && (
+           <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {users.map(u => (
+                    <AdminUserCard 
+                      key={u.uid} 
+                      user={u} 
+                      team={teams.find(t => t.userId === u.uid)}
+                      onUpdate={updateUser} 
+                      onDelete={deleteUser} 
+                      isProcessing={isProcessing} 
+                    />
+                 ))}
+              </div>
+           </div>
+         )}
          {activeSection === 'voting' && (
            <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4">
@@ -406,8 +489,8 @@ function AdminDebaterCard({ debater }: { debater: Debater, key?: string }) {
                   value={data.team}
                   onChange={e => setData({...data, team: e.target.value as 'A' | 'B'})}
                 >
-                  <option value="A">Team A (Government)</option>
-                  <option value="B">Team B (Opposition)</option>
+                  <option value="A">Team A</option>
+                  <option value="B">Team B</option>
                 </select>
              </div>
           </div>
@@ -565,4 +648,87 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
          </div>
       </div>
    );
+}
+
+function AdminUserCard({ user, team, onUpdate, onDelete, isProcessing }: { user: UserProfile, team?: Team, onUpdate: (u: UserProfile, budget: number) => void, onDelete: (id: string) => void, isProcessing: boolean }) {
+  const [data, setData] = useState(user);
+  const [budget, setBudget] = useState(team?.walletBalance || 0);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    setData(user);
+  }, [user.uid]);
+
+  useEffect(() => {
+    if (team) setBudget(team.walletBalance);
+  }, [team?.walletBalance]);
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4">
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <h4 className="font-bold text-lg flex items-center gap-2">
+            {data.displayName}
+            {data.isAdmin && <Shield className="w-4 h-4 text-amber-500" />}
+          </h4>
+          <p className="text-xs text-slate-500 font-mono italic">{data.email}</p>
+          <p className="text-[10px] text-slate-600 font-mono">UID: {data.uid}</p>
+        </div>
+        <button 
+          onClick={() => {
+            if (showConfirm) onDelete(user.uid);
+            else setShowConfirm(true);
+          }}
+          onMouseLeave={() => setShowConfirm(false)}
+          className={cn(
+            "p-3 rounded-2xl transition-all",
+            showConfirm ? "bg-red-600 text-white" : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+          )}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest px-1">Total Points</label>
+          <input 
+            type="number" 
+            className="bg-slate-950 p-3 rounded-xl w-full border border-slate-800 font-mono text-sm text-indigo-400" 
+            value={data.totalPoints} 
+            onChange={e => setData({...data, totalPoints: Number(e.target.value)})} 
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest px-1">Budget ($)</label>
+          <input 
+            type="number" 
+            className="bg-slate-950 p-3 rounded-xl w-full border border-slate-800 font-mono text-sm text-emerald-400" 
+            value={budget} 
+            onChange={e => setBudget(Number(e.target.value))} 
+          />
+        </div>
+      </div>
+      
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+         <div className="flex items-center gap-2 flex-1">
+            <input 
+               type="checkbox" 
+               id={`admin-${user.uid}`}
+               checked={data.isAdmin} 
+               onChange={e => setData({...data, isAdmin: e.target.checked})}
+               className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor={`admin-${user.uid}`} className="text-xs font-bold text-slate-400 cursor-pointer">Admin Permissions</label>
+         </div>
+         <button 
+           onClick={() => onUpdate(data, budget)}
+           disabled={isProcessing}
+           className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+         >
+           <Save className="w-4 h-4" /> Save
+         </button>
+      </div>
+    </div>
+  );
 }

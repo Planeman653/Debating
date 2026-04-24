@@ -81,7 +81,7 @@ service cloud.firestore {
     match /teams/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow create: if isSignedIn() && request.auth.uid == userId && isValidTeam(incoming()) && !isRoundLocked();
-      allow update: if isSignedIn() && request.auth.uid == userId && isValidTeam(incoming()) && !isRoundLocked();
+      allow update: if (isSignedIn() && request.auth.uid == userId && isValidTeam(incoming()) && !isRoundLocked()) || isAdmin();
       allow delete: if isAdmin();
     }
 
