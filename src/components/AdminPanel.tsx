@@ -245,6 +245,23 @@ export default function AdminPanel() {
     }
   };
 
+  const resetTeam = async (userId: string) => {
+    if (!window.confirm('Clear this user\'s squad? Their budget will remain as currently set in the editor.')) return;
+    try {
+      setIsProcessing(true);
+      await updateDoc(doc(db, 'teams', userId), {
+        debaterIds: [],
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Squad cleared');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reset squad');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const updateUser = async (user: UserProfile, walletBalance: number) => {
     try {
       setIsProcessing(true);
@@ -268,15 +285,15 @@ export default function AdminPanel() {
         }
       }
 
-      // Sync with Team points & walletBalance (if team exists)
+      // Sync with Team points & walletBalance
       const teamRef = doc(db, 'teams', user.uid);
-      const teamSnap = await getDoc(teamRef);
-      if (teamSnap.exists()) {
-        batch.update(teamRef, {
-          totalPoints: user.totalPoints,
-          walletBalance: walletBalance
-        });
-      }
+      batch.set(teamRef, {
+        totalPoints: user.totalPoints,
+        walletBalance: walletBalance,
+        userId: user.uid,
+        displayName: user.displayName,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
 
       await batch.commit();
       toast.success('User updated and synced!');
@@ -347,6 +364,7 @@ export default function AdminPanel() {
                       user={u} 
                       team={teams.find(t => t.userId === u.uid)}
                       onUpdate={updateUser} 
+                      onResetTeam={resetTeam}
                       onDelete={deleteUser} 
                       isProcessing={isProcessing} 
                     />
@@ -650,10 +668,11 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
    );
 }
 
-function AdminUserCard({ user, team, onUpdate, onDelete, isProcessing }: { user: UserProfile, team?: Team, onUpdate: (u: UserProfile, budget: number) => void, onDelete: (id: string) => void, isProcessing: boolean }) {
+function AdminUserCard({ user, team, onUpdate, onResetTeam, onDelete, isProcessing }: { user: UserProfile, team?: Team, onUpdate: (u: UserProfile, budget: number) => void, onResetTeam: (id: string) => void, onDelete: (id: string) => void, isProcessing: boolean }) {
   const [data, setData] = useState(user);
   const [budget, setBudget] = useState(team?.walletBalance || 0);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     setData(user);
@@ -721,13 +740,35 @@ function AdminUserCard({ user, team, onUpdate, onDelete, isProcessing }: { user:
             />
             <label htmlFor={`admin-${user.uid}`} className="text-xs font-bold text-slate-400 cursor-pointer">Admin Permissions</label>
          </div>
-         <button 
-           onClick={() => onUpdate(data, budget)}
-           disabled={isProcessing}
-           className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-         >
-           <Save className="w-4 h-4" /> Save
-         </button>
+         <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={() => {
+                if (showResetConfirm) {
+                  onResetTeam(user.uid);
+                  setShowResetConfirm(false);
+                } else {
+                  setShowResetConfirm(true);
+                }
+              }}
+              onMouseLeave={() => setShowResetConfirm(false)}
+              disabled={isProcessing}
+              className={cn(
+                "px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 border",
+                showResetConfirm 
+                  ? "bg-red-500 border-red-500 text-white" 
+                  : "bg-transparent border-slate-800 text-slate-400 hover:text-white"
+              )}
+            >
+              {showResetConfirm ? "Confirm Clear" : "Clear Squad"}
+            </button>
+            <button 
+              onClick={() => onUpdate(data, budget)}
+              disabled={isProcessing}
+              className="bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" /> Save
+            </button>
+         </div>
       </div>
     </div>
   );
