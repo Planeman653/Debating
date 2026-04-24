@@ -11,3 +11,11 @@ export function formatCurrency(value: number) {
     currency: 'USD',
   }).format(value).replace('$', 'Ð '); // Debate tokens? Let's use Ð
 }
+
+export function calculateLevel(points: number) {
+  if (points >= 500) return 5;
+  if (points >= 250) return 4;
+  if (points >= 125) return 3;
+  if (points >= 50) return 2;
+  return 1;
+}

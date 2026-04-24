@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, updateDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { Debater, Team, SystemState, UserProfile } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, calculateLevel, cn } from '../lib/utils';
 import { Trash2, Plus, Wallet, ShieldCheck, Lock, TriangleAlert } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
@@ -160,7 +160,7 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
                                 )}
                              </div>
                              <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[8px] md:text-[10px] font-black px-2 py-1 rounded-full border-2 border-slate-900">
-                                LVL 1
+                                LVL {calculateLevel(debater.totalPoints)}
                              </div>
                           </div>
                           <h4 className="font-bold text-lg md:text-xl mb-1 px-4 text-center">{debater.name}</h4>
@@ -243,7 +243,10 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
                                d.team === 'A' ? "text-indigo-400 bg-indigo-400/10" : "text-amber-400 bg-amber-400/10"
                              )}>T{d.team}</span>
                            </h5>
-                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Points: {d.totalPoints}</p>
+                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter flex items-center gap-2">
+                             Points: {d.totalPoints}
+                             <span className="text-indigo-400">LVL {calculateLevel(d.totalPoints)}</span>
+                           </p>
                         </div>
                      </div>
                      <div className="flex items-center gap-6">

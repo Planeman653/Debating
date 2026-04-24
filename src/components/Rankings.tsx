@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Debater } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, calculateLevel, cn } from '../lib/utils';
 import { Search, Trophy } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -160,7 +160,10 @@ export default function Rankings() {
                                     {d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" alt="" /> : <span className="text-xs font-bold">{d.name[0]}</span>}
                                  </div>
                                  <div>
-                                    <h4 className="font-bold text-sm tracking-tight">{d.name}</h4>
+                                    <h4 className="font-bold text-sm tracking-tight flex items-center gap-2">
+                                       {d.name}
+                                       <span className="text-[8px] bg-indigo-600 text-white px-1 rounded-sm">LVL {calculateLevel(d.totalPoints)}</span>
+                                    </h4>
                                     <span className={cn(
                                        "text-[10px] font-black uppercase tracking-widest",
                                        d.team === 'A' ? "text-indigo-400" : "text-amber-400"
