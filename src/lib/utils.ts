@@ -19,3 +19,27 @@ export function calculateLevel(points: number) {
   if (points >= 50) return 2;
   return 1;
 }
+
+export function isAutoLocked(rounds: { deadline: string; status: string }[], state: { isLocked: boolean, lockMode?: 'auto' | 'manual-locked' | 'manual-unlocked' } | null) {
+  // Manual overrides first
+  if (state?.lockMode === 'manual-locked') return true;
+  if (state?.lockMode === 'manual-unlocked') return false;
+  
+  // If no advanced lockMode, fallback to legacy isLocked (which basically acts as a manual toggle)
+  if (state && !state.lockMode && state.isLocked) return true;
+
+  // Now check auto-lock if mode is 'auto' (or no mode but state exists)
+  // Usually default to auto unless manual-unlocked is set
+  const upcomingRounds = rounds.filter(r => r.status === 'upcoming');
+  if (upcomingRounds.length === 0) return false;
+
+  const nextRound = upcomingRounds.sort((a, b) => 
+    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  )[0];
+
+  const deadline = new Date(nextRound.deadline).getTime();
+  const now = new Date().getTime();
+  const thirtyMinutes = 30 * 60 * 1000;
+
+  return (deadline - thirtyMinutes) <= now;
+}

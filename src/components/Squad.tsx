@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, updateDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { Debater, Team, SystemState, UserProfile } from '../types';
-import { formatCurrency, calculateLevel, cn } from '../lib/utils';
-import { Trash2, Plus, Wallet, ShieldCheck, Lock, TriangleAlert } from 'lucide-react';
+import { Debater, Team, SystemState, UserProfile, Round } from '../types';
+import { formatCurrency, calculateLevel, isAutoLocked, cn } from '../lib/utils';
+import { Trash2, Plus, Wallet, ShieldCheck, Lock, Unlock, TriangleAlert } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -16,6 +16,7 @@ interface SquadProps {
 export default function Squad({ user, systemState, profile }: SquadProps) {
   const [team, setTeam] = useState<Team | null>(null);
   const [allDebaters, setAllDebaters] = useState<Debater[]>([]);
+  const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,17 +48,24 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
       setAllDebaters(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Debater)));
     });
 
+    const unsubRounds = onSnapshot(collection(db, 'rounds'), (snapshot) => {
+      setRounds(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Round)));
+    });
+
     return () => {
       unsubTeam();
       unsubDebaters();
+      unsubRounds();
     };
   }, [user.uid, systemState?.initialBudget]);
+
+  const isLocked = isAutoLocked(rounds, systemState);
 
   const squadDebaters = allDebaters.filter(d => team?.debaterIds.includes(d.id));
   const currentWallet = team?.walletBalance ?? 50;
 
   const addToSquad = async (debater: Debater) => {
-    if (systemState?.isLocked) return toast.error('Teams are currently locked!');
+    if (isLocked) return toast.error('Teams are currently locked!');
     if (!team) return;
     if (team.debaterIds.length >= 3) return toast.error('Your squad is full! (Max 3)');
     if (team.debaterIds.includes(debater.id)) return toast.error('Already in your squad!');
@@ -82,7 +90,7 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
   };
 
   const removeFromSquad = async (debater: Debater) => {
-    if (systemState?.isLocked) return toast.error('Teams are currently locked!');
+    if (isLocked) return toast.error('Teams are currently locked!');
     if (!team) return;
     
     try {
@@ -200,18 +208,24 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
          </AnimatePresence>
       </section>
 
-      {systemState?.isLocked && (
+      {isLocked && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4 text-amber-500 shadow-lg shadow-amber-500/5">
            <Lock className="w-6 h-6 shrink-0" />
            <div>
               <h5 className="font-black uppercase tracking-wider text-sm">Squad Locked</h5>
-              <p className="text-xs opacity-80">The round is in progress. Transfers are disabled until the next round opens.</p>
+              <p className="text-xs opacity-80">
+                {systemState?.lockMode === 'manual-locked' 
+                  ? "Manual override: Squads have been locked by an administrator." 
+                  : systemState?.lockMode === 'manual-unlocked'
+                  ? "Manual override: Squads have been forced open by an administrator."
+                  : "Automatic lock: Transfers are disabled 30 minutes before the round begins."}
+              </p>
            </div>
         </div>
       )}
 
       {/* Available for Draft */}
-      {!systemState?.isLocked && (
+      {!isLocked && (
         <section className="space-y-4">
            <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold flex items-center gap-2">

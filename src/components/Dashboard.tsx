@@ -3,7 +3,8 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Round, SystemState } from '../types';
 import { differenceInSeconds } from 'date-fns';
-import { Timer, Trophy, AlertCircle } from 'lucide-react';
+import { Timer, Trophy, AlertCircle, Lock, Clock } from 'lucide-react';
+import { isAutoLocked } from '../lib/utils';
 import { motion } from 'motion/react';
 
 interface DashboardProps {
@@ -13,18 +14,29 @@ interface DashboardProps {
 
 export default function Dashboard({ systemState }: DashboardProps) {
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
+  const [allRounds, setAllRounds] = useState<Round[]>([]);
   const [timeLeft, setTimeLeft] = useState<{ d: number; h: number; m: number; s: number } | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'rounds'), where('status', 'in', ['upcoming', 'active']));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(collection(db, 'rounds'), (snapshot) => {
       const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Round));
-      // Sort by round number
-      const sorted = rounds.sort((a, b) => a.roundNumber - b.roundNumber);
+      setAllRounds(rounds);
+      
+      const activeOrUpcoming = rounds.filter(r => ['upcoming', 'active'].includes(r.status));
+      const sorted = activeOrUpcoming.sort((a, b) => a.roundNumber - b.roundNumber);
       setCurrentRound(sorted[0] || null);
     });
     return () => unsub();
   }, []);
+
+  const isLocked = isAutoLocked(allRounds, systemState);
+
+  const nextRoundForLock = allRounds
+    .filter(r => r.status === 'upcoming')
+    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())[0];
+  
+  const lockTime = nextRoundForLock ? new Date(nextRoundForLock.deadline).getTime() - (30 * 60 * 1000) : null;
+  const isPendingLock = lockTime && !isLocked && (lockTime > Date.now());
 
   useEffect(() => {
     if (!currentRound) return;
@@ -88,10 +100,17 @@ export default function Dashboard({ systemState }: DashboardProps) {
               ))}
             </div>
 
-            {systemState?.isLocked && (
+            {isLocked && (
               <div className="mt-8 flex items-center gap-2 text-amber-500 bg-amber-500/10 px-4 py-2 rounded-full border border-amber-500/20 text-xs font-bold uppercase tracking-wider">
-                <AlertCircle className="w-4 h-4" />
-                Squads are currently locked
+                <Lock className="w-4 h-4" />
+                {systemState?.lockMode === 'manual-locked' ? "SQUADS MANUALLY LOCKED" : "SQUADS AUTO-LOCKED (-30m)"}
+              </div>
+            )}
+            
+            {isPendingLock && (
+              <div className="mt-8 flex items-center gap-2 text-emerald-400 bg-emerald-400/5 px-4 py-2 rounded-full border border-emerald-400/10 text-[10px] font-bold uppercase tracking-widest">
+                <Clock className="w-3.5 h-3.5" />
+                Squads lock 30m before round
               </div>
             )}
           </motion.div>

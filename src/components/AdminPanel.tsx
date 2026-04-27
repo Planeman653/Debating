@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { 
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, 
   query, orderBy, getDocs, writeBatch, getDoc, increment
 } from 'firebase/firestore';
 import { Debater, Round, SystemState, Team, UserProfile } from '../types';
-import { Plus, Trash2, Save, Send, Lock, Unlock, TrendingUp, UserPlus, CalendarPlus, Calendar, Star, Vote, Users, Shield } from 'lucide-react';
+import { Plus, Trash2, Save, Send, Lock, Unlock, TrendingUp, UserPlus, CalendarPlus, Calendar, Star, Vote, Users, Shield, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { cn } from '../lib/utils';
+import { cn, isAutoLocked } from '../lib/utils';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -74,11 +74,15 @@ export default function AdminPanel() {
     }
   };
 
-  const toggleLock = async () => {
+  const setLockMode = async (mode: 'auto' | 'manual-locked' | 'manual-unlocked') => {
     if (!state) return;
     try {
-      await setDoc(doc(db, 'state', 'lock'), { ...state, isLocked: !state.isLocked }, { merge: true });
-      toast.success(state.isLocked ? 'Unlocked squads' : 'Locked squads');
+      await setDoc(doc(db, 'state', 'lock'), { 
+        ...state, 
+        lockMode: mode,
+        isLocked: mode === 'manual-locked'
+      }, { merge: true });
+      toast.success(`Lock mode: ${mode.replace('-', ' ')}`);
     } catch (err) {
       toast.error('Unauthorized action');
     }
@@ -129,7 +133,8 @@ export default function AdminPanel() {
       // Unlock global state
       batch.set(doc(db, 'state', 'lock'), { 
         isLocked: false, 
-        currentRoundId: '' 
+        currentRoundId: '',
+        lockMode: 'auto'
       }, { merge: true });
 
       await batch.commit();
@@ -312,18 +317,40 @@ export default function AdminPanel() {
            <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter">ADMIN COMMAND</h2>
            <p className="opacity-80 font-bold uppercase tracking-widest text-[10px] md:text-xs text-center sm:text-left">Authority Panel</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <button 
-            type="button"
-            onClick={toggleLock}
-            className={cn(
-              "relative z-10 flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase tracking-tighter transition-all shadow-xl cursor-pointer justify-center",
-              state?.isLocked ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"
-            )}
-          >
-            {state?.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-            <span className="text-sm">{state?.isLocked ? 'Unlock Squads' : 'Lock Squads'}</span>
-          </button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-center">
+          <div className="flex bg-slate-900/50 p-1 rounded-2xl border border-white/10 relative z-10 w-full sm:w-auto">
+            {[
+              { id: 'auto', icon: Clock, label: 'Auto' },
+              { id: 'manual-locked', icon: Lock, label: 'Lock' },
+              { id: 'manual-unlocked', icon: Unlock, label: 'Open' }
+            ].map((mode) => {
+              const isActive = (state?.lockMode || 'auto') === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setLockMode(mode.id as any)}
+                  className={cn(
+                    "flex flex-1 sm:flex-none items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all cursor-pointer justify-center whitespace-nowrap",
+                    isActive ? "bg-white text-indigo-600 shadow-lg" : "text-white/60 hover:text-white"
+                  )}
+                >
+                  <mode.icon className="w-3.5 h-3.5" />
+                  {mode.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden lg:flex items-center gap-2 bg-slate-900/30 px-4 py-2 rounded-xl border border-white/5">
+             <div className={cn(
+               "w-2 h-2 rounded-full animate-pulse",
+               isAutoLocked(rounds, state) ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+             )} />
+             <span className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                Effective: {isAutoLocked(rounds, state) ? 'Locked' : 'Open'}
+             </span>
+          </div>
+
           <button 
             type="button"
             onClick={toggleVoting}
@@ -668,7 +695,16 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
    );
 }
 
-function AdminUserCard({ user, team, onUpdate, onResetTeam, onDelete, isProcessing }: { user: UserProfile, team?: Team, onUpdate: (u: UserProfile, budget: number) => void, onResetTeam: (id: string) => void, onDelete: (id: string) => void, isProcessing: boolean }) {
+interface AdminUserCardProps {
+  user: UserProfile;
+  team?: Team;
+  onUpdate: (u: UserProfile, budget: number) => void;
+  onResetTeam: (id: string) => void;
+  onDelete: (id: string) => void;
+  isProcessing: boolean;
+}
+
+const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, team, onUpdate, onResetTeam, onDelete, isProcessing }) => {
   const [data, setData] = useState(user);
   const [budget, setBudget] = useState(team?.walletBalance || 0);
   const [showConfirm, setShowConfirm] = useState(false);

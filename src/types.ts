@@ -28,7 +28,8 @@ export interface Team {
 }
 
 export interface SystemState {
-  isLocked: boolean;
+  isLocked: boolean; // Backwards compatible / legacy
+  lockMode?: 'auto' | 'manual-locked' | 'manual-unlocked';
   currentRoundId: string;
   initialBudget: number;
   isVotingOpen?: boolean;
