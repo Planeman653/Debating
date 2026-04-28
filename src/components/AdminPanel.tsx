@@ -390,6 +390,7 @@ export default function AdminPanel() {
                       key={u.uid} 
                       user={u} 
                       team={teams.find(t => t.userId === u.uid)}
+                      debaters={debaters}
                       onUpdate={updateUser} 
                       onResetTeam={resetTeam}
                       onDelete={deleteUser} 
@@ -698,17 +699,21 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
 interface AdminUserCardProps {
   user: UserProfile;
   team?: Team;
+  debaters: Debater[];
   onUpdate: (u: UserProfile, budget: number) => void;
   onResetTeam: (id: string) => void;
   onDelete: (id: string) => void;
   isProcessing: boolean;
 }
 
-const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, team, onUpdate, onResetTeam, onDelete, isProcessing }) => {
+const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, team, debaters, onUpdate, onResetTeam, onDelete, isProcessing }) => {
   const [data, setData] = useState(user);
   const [budget, setBudget] = useState(team?.walletBalance || 0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const squadMemberDetails = team?.debaterIds.map(id => debaters.find(d => d.id === id)).filter(Boolean) as Debater[] || [];
+  const totalCost = squadMemberDetails.reduce((sum, d) => sum + d.price, 0);
 
   useEffect(() => {
     setData(user);
@@ -763,6 +768,25 @@ const AdminUserCard: React.FC<AdminUserCardProps> = ({ user, team, onUpdate, onR
             onChange={e => setBudget(Number(e.target.value))} 
           />
         </div>
+      </div>
+
+      <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800/50">
+        <div className="flex justify-between items-center mb-3">
+          <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Squad Members ({squadMemberDetails.length}/3)</h5>
+          <span className="text-[10px] font-bold text-emerald-400">Value: Ð {totalCost.toFixed(1)}</span>
+        </div>
+        {squadMemberDetails.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {squadMemberDetails.map(d => (
+              <div key={d.id} className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <span className="text-xs font-bold">{d.name}</span>
+                <span className="text-[10px] opacity-60 font-mono">Ð{d.price}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-slate-600 italic">No debaters drafted</p>
+        )}
       </div>
       
       <div className="flex flex-col sm:flex-row items-center gap-4">
