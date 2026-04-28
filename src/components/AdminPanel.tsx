@@ -103,7 +103,7 @@ export default function AdminPanel() {
       for (const [id, score] of Object.entries(scores)) {
         const d = debaters.find(deb => deb.id === id);
         if (d) {
-          const nextPrice = Math.max(1, d.price + (score * 0.01));
+          const nextPrice = Math.max(1, d.price + (score * 0.02));
           batch.update(doc(db, 'debaters', id), {
             totalPoints: increment(score),
             lastRoundPoints: score,
@@ -166,7 +166,7 @@ export default function AdminPanel() {
         const diff = newScore - oldScore;
 
         if (diff !== 0) {
-          const nextPrice = Math.max(1, d.price + (diff * 0.01));
+          const nextPrice = Math.max(1, d.price + (diff * 0.02));
           batch.update(doc(db, 'debaters', d.id), {
             totalPoints: increment(diff),
             lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
