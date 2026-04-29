@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot, query } from 'firebase/firestore';
-import { Debater, SystemState } from '../types';
-import { Vote, Star, CheckCircle2, Trophy, User } from 'lucide-react';
+import { Debater, SystemState, Round } from '../types';
+import { Vote, Star, CheckCircle2, Trophy, User, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { toast } from 'react-hot-toast';
@@ -14,6 +14,7 @@ interface VotingProps {
 
 export default function Voting({ user, systemState }: VotingProps) {
   const [debaters, setDebaters] = useState<Debater[]>([]);
+  const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -22,6 +23,13 @@ export default function Voting({ user, systemState }: VotingProps) {
     // Listen for debaters
     const unsubD = onSnapshot(collection(db, 'debaters'), (snap) => {
       setDebaters(snap.docs.map(d => ({ id: d.id, ...d.data() } as Debater)));
+    });
+
+    // Listen for active round to get lineup
+    const unsubR = onSnapshot(collection(db, 'rounds'), (snap) => {
+      const rounds = snap.docs.map(d => ({ id: d.id, ...d.data() } as Round));
+      const active = rounds.find(r => r.status === 'active') || rounds.find(r => r.status === 'upcoming');
+      setActiveRound(active || null);
     });
 
     // Listen for my vote
@@ -43,6 +51,7 @@ export default function Voting({ user, systemState }: VotingProps) {
 
     return () => {
       unsubD();
+      unsubR();
       unsubV();
       unsubAllV();
     };
@@ -65,6 +74,7 @@ export default function Voting({ user, systemState }: VotingProps) {
   if (loading) return null;
 
   const isVotingOpen = systemState?.isVotingOpen;
+  const lineupDebaters = debaters.filter(d => activeRound?.selectedDebaterIds?.includes(d.id));
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -90,7 +100,7 @@ export default function Voting({ user, systemState }: VotingProps) {
 
       {isVotingOpen && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 md:pb-0">
-           {debaters.map((d) => {
+           {lineupDebaters.length > 0 ? lineupDebaters.map((d) => {
               const hasVotedForThis = myVote === d.id;
               const votes = voteCounts[d.id] || 0;
               
@@ -104,9 +114,9 @@ export default function Voting({ user, systemState }: VotingProps) {
                   )}
                 >
                    {hasVotedForThis && (
-                     <div className="absolute top-0 right-0 p-4">
-                        <CheckCircle2 className="w-6 h-6 text-indigo-500" />
-                     </div>
+                      <div className="absolute top-0 right-0 p-4">
+                         <CheckCircle2 className="w-6 h-6 text-indigo-500" />
+                      </div>
                    )}
 
                    <div className="flex flex-col items-center text-center space-y-4 relative z-10">
@@ -148,7 +158,13 @@ export default function Voting({ user, systemState }: VotingProps) {
                    </div>
                 </motion.div>
               );
-           })}
+           }) : (
+             <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-900/30 border border-slate-800 border-dashed rounded-3xl">
+                <Users className="w-8 h-8 text-slate-600 mb-2" />
+                <p className="text-slate-500 font-medium">Lineup not selected yet</p>
+                <p className="text-[10px] text-slate-600 uppercase font-black mt-1">Check back when the round starts!</p>
+             </div>
+           )}
         </div>
       )}
     </div>
