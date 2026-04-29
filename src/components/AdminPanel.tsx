@@ -42,7 +42,8 @@ export default function AdminPanel() {
         price: 10,
         totalPoints: 0,
         lastRoundPoints: 0,
-        bio: ''
+        bio: '',
+        imageUrl: ''
       });
       toast.success('Debater added');
     } catch (err) {
@@ -530,6 +531,15 @@ function AdminDebaterCard({ debater }: { debater: Debater, key?: string }) {
   return (
     <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-4">
        <div className="space-y-4">
+          <div className="space-y-1">
+             <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest px-1">Profile Image URL</label>
+             <input 
+                className="bg-slate-950 p-3 rounded-xl flex-1 border border-slate-800 w-full text-xs font-mono text-indigo-300" 
+                placeholder="https://images.com/profile.jpg"
+                value={data.imageUrl || ''} 
+                onChange={e => setData({...data, imageUrl: e.target.value})} 
+             />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
              <div className="space-y-1">
                 <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest px-1">Name</label>
