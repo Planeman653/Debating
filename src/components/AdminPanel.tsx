@@ -99,30 +99,34 @@ export default function AdminPanel() {
         debaterScores: scores
       });
 
-      // Update debater total stats and prices
-      for (const [id, score] of Object.entries(scores)) {
-        const d = debaters.find(deb => deb.id === id);
-        if (d) {
-          const nextPrice = Math.max(1, d.price + (score * 0.02));
-          batch.update(doc(db, 'debaters', id), {
-            totalPoints: increment(score),
-            lastRoundPoints: score,
-            price: Number(nextPrice.toFixed(1))
-          });
-        }
-      }
-
-      // Update user scores based on their team performance
-      const teamsSnap = await getDocs(collection(db, 'teams'));
-      const activeTeams = teamsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }));
-      
-      for (const team of activeTeams) {
-        let teamRoundPoints = 0;
-        team.debaterIds.forEach(id => {
-          teamRoundPoints += (scores[id] || 0);
-        });
-
-        if (teamRoundPoints !== 0) {
+       // Update debater total stats and prices
+       const lineupIds = round.selectedDebaterIds || [];
+       for (const id of lineupIds) {
+         const score = scores[id] || 0;
+         const d = debaters.find(deb => deb.id === id);
+         if (d) {
+           const nextPrice = Math.max(1, d.price + (score * 0.01));
+           batch.update(doc(db, 'debaters', id), {
+             totalPoints: increment(score),
+             lastRoundPoints: score,
+             price: Number(nextPrice.toFixed(1))
+           });
+         }
+       }
+ 
+       // Update user scores based on their team performance
+       const teamsSnap = await getDocs(collection(db, 'teams'));
+       const activeTeams = teamsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }));
+       
+       for (const team of activeTeams) {
+         let teamRoundPoints = 0;
+         team.debaterIds.forEach(id => {
+           if (lineupIds.includes(id)) {
+             teamRoundPoints += (scores[id] || 0);
+           }
+         });
+ 
+         if (teamRoundPoints !== 0) {
           const userRef = doc(db, 'users', team.uid);
           batch.update(userRef, {
             totalPoints: increment(teamRoundPoints)
@@ -159,35 +163,38 @@ export default function AdminPanel() {
         debaterScores: newScores
       });
 
-      // 2. Diff debater scores
-      for (const d of debaters) {
-        const oldScore = oldScores[d.id] || 0;
-        const newScore = newScores[d.id] || 0;
-        const diff = newScore - oldScore;
+       // 2. Diff debater scores
+       const lineupIds = round.selectedDebaterIds || [];
+       for (const d of debaters.filter(deb => lineupIds.includes(deb.id))) {
+         const oldScore = oldScores[d.id] || 0;
+         const newScore = newScores[d.id] || 0;
+         const diff = newScore - oldScore;
 
-        if (diff !== 0) {
-          const nextPrice = Math.max(1, d.price + (diff * 0.02));
-          batch.update(doc(db, 'debaters', d.id), {
-            totalPoints: increment(diff),
-            lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
-            price: Number(nextPrice.toFixed(1))
-          });
-        }
-      }
+         if (diff !== 0) {
+           const nextPrice = Math.max(1, d.price + (diff * 0.01));
+           batch.update(doc(db, 'debaters', d.id), {
+             totalPoints: increment(diff),
+             lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
+             price: Number(nextPrice.toFixed(1))
+           });
+         }
+       }
 
-      // 3. Diff user scores
-      const teamsSnap = await getDocs(collection(db, 'teams'));
-      const activeTeams = teamsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }));
+       // 3. Diff user scores
+       const teamsSnap = await getDocs(collection(db, 'teams'));
+       const activeTeams = teamsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }));
 
-      for (const team of activeTeams) {
-        let teamDiff = 0;
-        team.debaterIds.forEach(id => {
-          const oldS = oldScores[id] || 0;
-          const newS = newScores[id] || 0;
-          teamDiff += (newS - oldS);
-        });
+       for (const team of activeTeams) {
+         let teamDiff = 0;
+         team.debaterIds.forEach(id => {
+           if (lineupIds.includes(id)) {
+             const oldS = oldScores[id] || 0;
+             const newS = newScores[id] || 0;
+             teamDiff += (newS - oldS);
+           }
+         });
 
-        if (teamDiff !== 0) {
+         if (teamDiff !== 0) {
           batch.update(doc(db, 'users', team.uid), {
             totalPoints: increment(teamDiff)
           });
@@ -586,12 +593,13 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
    const [scores, setScores] = useState<Record<string, number>>(round.debaterScores || {});
    const [topic, setTopic] = useState(round.topic);
    const [deadline, setDeadline] = useState(round.deadline);
+   const [selectedDebaterIds, setSelectedDebaterIds] = useState<string[]>(round.selectedDebaterIds || []);
    const [isUpdating, setIsUpdating] = useState(false);
 
    const save = async () => {
       try {
         setIsUpdating(true);
-        await updateDoc(doc(db, 'rounds', round.id), { topic, deadline });
+        await updateDoc(doc(db, 'rounds', round.id), { topic, deadline, selectedDebaterIds });
         toast.success('Round updated');
       } catch (err) {
         console.error(err);
@@ -600,6 +608,26 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
         setIsUpdating(false);
       }
    };
+
+   const toggleDebaterSelection = (id: string) => {
+     setSelectedDebaterIds(prev => {
+       if (prev.includes(id)) return prev.filter(i => i !== id);
+       
+       const debater = debaters.find(d => d.id === id);
+       if (!debater) return prev;
+       
+       const teamCount = prev.filter(pId => debaters.find(d => d.id === pId)?.team === debater.team).length;
+       if (teamCount >= 3) {
+         toast.error(`Team ${debater.team} already has 3 members selected!`);
+         return prev;
+       }
+       
+       return [...prev, id];
+     });
+   };
+
+   // Only score selected debaters
+   const lineupDebaters = debaters.filter(d => selectedDebaterIds.includes(d.id));
 
    const deleteRound = async () => {
       try {
@@ -643,25 +671,62 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
             </div>
          </div>
 
-         <div className="bg-slate-950 p-6 rounded-2xl space-y-4">
-            <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-               {round.status === 'completed' ? 'Correct Round Scores' : 'Record Round Scores'}
-            </h5>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-               {debaters.map(d => (
-                 <div key={d.id} className="flex flex-col gap-1">
-                    <label className="text-[10px] truncate">{d.name}</label>
-                    <input 
-                      type="number" 
-                      className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-xs"
-                      value={scores[d.id] || 0}
-                      onChange={e => setScores({...scores, [d.id]: Number(e.target.value)})}
-                    />
-                 </div>
-               ))}
+         <div className="bg-slate-950 p-6 rounded-2xl space-y-6">
+            <div className="space-y-3">
+               <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select Lineup (3 per team)</h5>
+               <div className="grid grid-cols-2 gap-4">
+                  {(['A', 'B'] as const).map(team => (
+                     <div key={team} className="space-y-2">
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded", team === 'A' ? "bg-indigo-500/20 text-indigo-400" : "bg-amber-500/20 text-amber-400")}>
+                           Team {team} ({selectedDebaterIds.filter(id => debaters.find(d => d.id === id)?.team === team).length}/3)
+                        </span>
+                        <div className="flex flex-col gap-1">
+                           {debaters.filter(d => d.team === team).map(d => (
+                              <button 
+                                 key={d.id}
+                                 onClick={() => toggleDebaterSelection(d.id)}
+                                 className={cn(
+                                    "text-left px-3 py-2 rounded-lg text-xs font-bold transition-all border",
+                                    selectedDebaterIds.includes(d.id) 
+                                       ? (team === 'A' ? "bg-indigo-600 border-indigo-500 text-white" : "bg-amber-600 border-amber-500 text-white")
+                                       : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600"
+                                 )}
+                              >
+                                 {d.name}
+                              </button>
+                           ))}
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </div>
+
+            <div className="h-px bg-slate-800/50" />
+
+            <div className="space-y-4">
+               <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {round.status === 'completed' ? 'Correct Lineup Scores' : 'Record Lineup Scores'}
+               </h5>
+               {lineupDebaters.length === 0 ? (
+                  <p className="text-[10px] text-slate-600 italic">Select a lineup above to record scores</p>
+               ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                     {lineupDebaters.map(d => (
+                        <div key={d.id} className="flex flex-col gap-1">
+                           <label className="text-[10px] truncate font-bold text-slate-400">{d.name}</label>
+                           <input 
+                           type="number" 
+                           className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-xs"
+                           value={scores[d.id] || 0}
+                           onChange={e => setScores({...scores, [d.id]: Number(e.target.value)})}
+                           />
+                        </div>
+                     ))}
+                  </div>
+               )}
             </div>
             
-            {round.status !== 'completed' ? (
+            {(round.status !== 'completed' && lineupDebaters.length === 6) ? (
               <button 
                 type="button"
                 disabled={isProcessing}

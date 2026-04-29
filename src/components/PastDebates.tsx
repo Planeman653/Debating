@@ -68,32 +68,49 @@ export default function PastDebates() {
                  </div>
               </div>
 
-              <div className="p-6">
-                 <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Round Results</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(round.debaterScores || {}).map(([debaterId, score]) => {
-                       const d = debaters[debaterId];
-                       const s = score as number;
-                       if (!d) return null;
-                       return (
-                          <div key={debaterId} className="bg-slate-950/50 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
-                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
-                                   {d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold flex items-center justify-center h-full">{d.name[0]}</span>}
-                                </div>
-                                <span className="text-sm font-bold truncate max-w-[100px]">{d.name}</span>
-                             </div>
-                             <span className={cn(
-                                "font-mono font-bold",
-                                s > 0 ? "text-emerald-500" : s < 0 ? "text-red-500" : "text-slate-500"
-                             )}>
-                                {s > 0 ? `+${s}` : s}
-                             </span>
-                          </div>
-                       );
-                    })}
-                 </div>
-              </div>
+               <div className="p-6">
+                  <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4 italic">Performance Breakdown</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     {round.selectedDebaterIds?.map(debaterId => {
+                        const d = debaters[debaterId];
+                        const score = round.debaterScores?.[debaterId] || 0;
+                        if (!d) return null;
+                        return (
+                           <div key={debaterId} className="bg-slate-950/50 border border-slate-800 p-3 rounded-2xl flex items-center justify-between group hover:border-indigo-500/30 transition-colors">
+                              <div className="flex items-center gap-3">
+                                 <div className="relative">
+                                    <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-slate-700 p-0.5">
+                                       {d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover rounded-full" /> : <span className="text-[10px] font-bold flex items-center justify-center h-full text-slate-500">{d.name[0]}</span>}
+                                    </div>
+                                    <span className={cn(
+                                       "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border border-slate-900 flex items-center justify-center text-[8px] font-black text-white",
+                                       d.team === 'A' ? "bg-indigo-600" : "bg-amber-600"
+                                    )}>
+                                       {d.team}
+                                    </span>
+                                 </div>
+                                 <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-bold truncate text-slate-200 group-hover:text-white transition-colors">{d.name}</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-tighter font-black">Lineup Member</span>
+                                 </div>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                 <span className={cn(
+                                    "font-mono font-bold text-lg",
+                                    score > 0 ? "text-emerald-500" : score < 0 ? "text-red-500" : "text-slate-400"
+                                 )}>
+                                    {score > 0 ? `+${score}` : score}
+                                 </span>
+                                 <span className="text-[8px] text-slate-600 uppercase font-black">Points</span>
+                              </div>
+                           </div>
+                        );
+                     })}
+                  </div>
+                  {(!round.selectedDebaterIds || round.selectedDebaterIds.length === 0) && (
+                     <p className="text-xs text-slate-600 italic">No historical lineup data available for this round.</p>
+                  )}
+               </div>
             </motion.div>
           ))}
         </div>

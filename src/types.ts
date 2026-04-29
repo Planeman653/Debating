@@ -17,6 +17,7 @@ export interface Round {
   status: 'upcoming' | 'active' | 'completed';
   winnerSide?: 'Government' | 'Opposition' | 'Draw';
   debaterScores?: Record<string, number>; // debaterId -> points
+  selectedDebaterIds?: string[]; // IDs of the 6 people chosen to debate
 }
 
 export interface Team {
