@@ -28,8 +28,9 @@ export default function Voting({ user, systemState }: VotingProps) {
     // Listen for active round to get lineup
     const unsubR = onSnapshot(collection(db, 'rounds'), (snap) => {
       const rounds = snap.docs.map(d => ({ id: d.id, ...d.data() } as Round));
-      const active = rounds.find(r => r.status === 'active') || rounds.find(r => r.status === 'upcoming');
-      setActiveRound(active || null);
+      const activeOrUpcoming = rounds.filter(r => ['upcoming', 'active'].includes(r.status));
+      const sorted = activeOrUpcoming.sort((a, b) => a.roundNumber - b.roundNumber);
+      setActiveRound(sorted[0] || null);
     });
 
     // Listen for my vote
