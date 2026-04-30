@@ -156,12 +156,11 @@ export default function Dashboard({ systemState }: DashboardProps) {
           </div>
 
           {/* Lineup Section */}
-          {lineup.length > 0 && (
-            <motion.section 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4 pt-4"
-            >
+          <motion.section 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 pt-4"
+          >
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-500/10 rounded-xl">
                       <Users className="w-5 h-5 text-indigo-500" />
@@ -169,36 +168,46 @@ export default function Dashboard({ systemState }: DashboardProps) {
                   <h3 className="text-xl font-bold">Today's Starting Lineup</h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                      { title: 'Government (Team A)', members: governmentLineup, color: 'indigo' },
-                      { title: 'Opposition (Team B)', members: oppositionLineup, color: 'amber' }
-                  ].map((side) => (
-                      <div key={side.title} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4">
-                        <h4 className={cn("text-[10px] font-black uppercase tracking-[0.2em]", side.color === 'indigo' ? "text-indigo-400" : "text-amber-400")}>
-                            {side.title}
-                        </h4>
-                        <div className="space-y-3">
-                            {side.members.map(member => (
-                              <div key={member.id} className="flex items-center gap-3 group">
-                                  <div className="w-10 h-10 rounded-full bg-slate-950 border border-slate-800 p-0.5 overflow-hidden">
-                                    {member.imageUrl ? (
-                                        <img src={member.imageUrl} className="w-full h-full object-cover rounded-full" />
-                                    ) : (
-                                        <div className="w-full h-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 rounded-full">
-                                          {member.name[0]}
-                                        </div>
-                                    )}
-                                  </div>
-                                  <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{member.name}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {[
+                    { title: 'Government (Team A)', members: governmentLineup, color: 'indigo', isBye: currentRound.byeTeam === 'A' },
+                    { title: 'Opposition (Team B)', members: oppositionLineup, color: 'amber', isBye: currentRound.byeTeam === 'B' }
+                 ].map((side) => (
+                    <div key={side.title} className={cn("bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4", side.isBye && "opacity-60")}>
+                       <div className="flex justify-between items-center">
+                          <h4 className={cn("text-[10px] font-black uppercase tracking-[0.2em]", side.color === 'indigo' ? "text-indigo-400" : "text-amber-400")}>
+                             {side.title}
+                          </h4>
+                          {side.isBye && (
+                             <span className="text-[10px] font-black bg-slate-800 px-2 py-0.5 rounded text-slate-400">BYE</span>
+                          )}
+                       </div>
+                       <div className="space-y-3">
+                          {side.members.length > 0 ? (
+                             side.members.map(member => (
+                                <div key={member.id} className="flex items-center gap-3 group">
+                                   <div className="w-10 h-10 rounded-full bg-slate-950 border border-slate-800 p-0.5 overflow-hidden">
+                                      {member.imageUrl ? (
+                                         <img src={member.imageUrl} className="w-full h-full object-cover rounded-full" />
+                                      ) : (
+                                         <div className="w-full h-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 rounded-full">
+                                            {member.name[0]}
+                                         </div>
+                                      )}
+                                   </div>
+                                   <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{member.name}</span>
+                                </div>
+                             ))
+                          ) : (
+                             <p className="text-[10px] text-slate-600 italic">
+                                {side.isBye ? 'This team has a bye this round.' : 'No lineup selected yet.'}
+                             </p>
+                          )}
+                       </div>
+                    </div>
+                 ))}
+              </div>
             </motion.section>
-          )}
         </>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 bg-slate-900/50 border border-slate-800 rounded-3xl border-dashed">

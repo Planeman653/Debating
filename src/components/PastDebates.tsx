@@ -106,6 +106,12 @@ export default function PastDebates() {
                            </div>
                         );
                      })}
+                     {round.byeTeam && round.byeTeam !== 'None' && (
+                        <div className="col-span-full mt-2 p-3 bg-slate-900/50 border border-slate-800/50 rounded-2xl border-dashed flex items-center justify-center gap-2">
+                           <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-800 text-slate-500">BYE</span>
+                           <span className="text-sm text-slate-500 font-medium">Team {round.byeTeam === 'A' ? 'A (Government)' : 'B (Opposition)'} had a bye this round.</span>
+                        </div>
+                     )}
                   </div>
                   {(!round.selectedDebaterIds || round.selectedDebaterIds.length === 0) && (
                      <p className="text-xs text-slate-600 italic">No historical lineup data available for this round.</p>

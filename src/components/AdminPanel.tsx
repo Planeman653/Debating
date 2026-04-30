@@ -642,12 +642,13 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
    const [topic, setTopic] = useState(round.topic);
    const [deadline, setDeadline] = useState(round.deadline);
    const [selectedDebaterIds, setSelectedDebaterIds] = useState<string[]>(round.selectedDebaterIds || []);
+   const [byeTeam, setByeTeam] = useState<'A' | 'B' | 'None'>(round.byeTeam || 'None');
    const [isUpdating, setIsUpdating] = useState(false);
 
    const save = async () => {
       try {
         setIsUpdating(true);
-        await updateDoc(doc(db, 'rounds', round.id), { topic, deadline, selectedDebaterIds });
+        await updateDoc(doc(db, 'rounds', round.id), { topic, deadline, selectedDebaterIds, byeTeam });
         toast.success('Round updated');
       } catch (err) {
         console.error(err);
@@ -658,11 +659,16 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
    };
 
    const toggleDebaterSelection = (id: string) => {
+     const debater = debaters.find(d => d.id === id);
+     if (!debater) return;
+
+     if (debater.team === byeTeam) {
+       toast.error(`Team ${byeTeam} has a bye this round!`);
+       return;
+     }
+
      setSelectedDebaterIds(prev => {
        if (prev.includes(id)) return prev.filter(i => i !== id);
-       
-       const debater = debaters.find(d => d.id === id);
-       if (!debater) return prev;
        
        const teamCount = prev.filter(pId => debaters.find(d => d.id === pId)?.team === debater.team).length;
        if (teamCount >= 3) {
@@ -717,6 +723,25 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
                   wrapperClassName="w-full"
                />
             </div>
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+               {(['None', 'A', 'B'] as const).map(t => (
+                  <button
+                     key={t}
+                     onClick={() => {
+                        setByeTeam(t);
+                        if (t !== 'None') {
+                           setSelectedDebaterIds(prev => prev.filter(id => debaters.find(d => d.id === id)?.team !== t));
+                        }
+                     }}
+                     className={cn(
+                        "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                        byeTeam === t ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"
+                     )}
+                  >
+                     {t === 'None' ? 'No Bye' : `Bye: Team ${t}`}
+                  </button>
+               ))}
+            </div>
          </div>
 
          <div className="bg-slate-950 p-6 rounded-2xl space-y-6">
@@ -724,20 +749,21 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
                <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select Lineup (3 per team)</h5>
                <div className="grid grid-cols-2 gap-4">
                   {(['A', 'B'] as const).map(team => (
-                     <div key={team} className="space-y-2">
+                     <div key={team} className={cn("space-y-2", byeTeam === team && "opacity-30")}>
                         <span className={cn("text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded", team === 'A' ? "bg-indigo-500/20 text-indigo-400" : "bg-amber-500/20 text-amber-400")}>
-                           Team {team} ({selectedDebaterIds.filter(id => debaters.find(d => d.id === id)?.team === team).length}/3)
+                           Team {team} {byeTeam === team ? '(BYE)' : `(${selectedDebaterIds.filter(id => debaters.find(d => d.id === id)?.team === team).length}/3)`}
                         </span>
                         <div className="flex flex-col gap-1">
                            {debaters.filter(d => d.team === team).map(d => (
                               <button 
                                  key={d.id}
+                                 disabled={byeTeam === team}
                                  onClick={() => toggleDebaterSelection(d.id)}
                                  className={cn(
                                     "text-left px-3 py-2 rounded-lg text-xs font-bold transition-all border",
                                     selectedDebaterIds.includes(d.id) 
                                        ? (team === 'A' ? "bg-indigo-600 border-indigo-500 text-white" : "bg-amber-600 border-amber-500 text-white")
-                                       : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600"
+                                       : (byeTeam === team ? "bg-slate-950 border-slate-900 text-slate-800 cursor-not-allowed" : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600")
                                  )}
                               >
                                  {d.name}

@@ -19,6 +19,7 @@ export interface Round {
   winnerSide?: 'Government' | 'Opposition' | 'Draw';
   debaterScores?: Record<string, number>; // debaterId -> points
   selectedDebaterIds?: string[]; // IDs of the 6 people chosen to debate
+  byeTeam?: 'A' | 'B' | 'None'; // Team that has a bye
 }
 
 export interface Team {
