@@ -104,13 +104,28 @@ export default function AdminPanel() {
        const lineupIds = round.selectedDebaterIds || [];
        for (const id of lineupIds) {
          const score = scores[id] || 0;
-         const d = debaters.find(deb => deb.id === id);
-         if (d) {
-           const nextPrice = Math.max(1, d.price + (score * 0.01));
+         const d1 = debaters.find(deb => deb.id === id);
+         if (d1) {
+           // New relative pricing logic:
+           // +0.2 per more expensive debater outscored
+           // -0.2 per less expensive debater outscored by
+           let adjustment = 0;
+           lineupIds.forEach(id2 => {
+             if (id === id2) return;
+             const d2 = debaters.find(deb => deb.id === id2);
+             if (!d2) return;
+             const score2 = scores[id2] || 0;
+             
+             if (score > score2 && d1.price < d2.price) adjustment += 0.2;
+             if (score < score2 && d1.price > d2.price) adjustment -= 0.2;
+           });
+
+           const nextPrice = Math.max(1, d1.price + adjustment);
            batch.update(doc(db, 'debaters', id), {
              totalPoints: increment(score),
              lastRoundPoints: score,
-             price: Number(nextPrice.toFixed(1))
+             price: Number(nextPrice.toFixed(1)),
+             lastPriceChange: Number(adjustment.toFixed(1))
            });
          }
        }
@@ -164,19 +179,42 @@ export default function AdminPanel() {
         debaterScores: newScores
       });
 
-       // 2. Diff debater scores
+       // 2. Diff debater scores and prices based on relative performance
        const lineupIds = round.selectedDebaterIds || [];
        for (const d of debaters.filter(deb => lineupIds.includes(deb.id))) {
          const oldScore = oldScores[d.id] || 0;
          const newScore = newScores[d.id] || 0;
-         const diff = newScore - oldScore;
+         const scoreDiff = newScore - oldScore;
 
-         if (diff !== 0) {
-           const nextPrice = Math.max(1, d.price + (diff * 0.01));
+         // Calculate adjustments for both old and new scores to find the price delta
+         const calculateAdjustment = (targetId: string, currentScores: Record<string, number>) => {
+           const d1 = debaters.find(deb => deb.id === targetId);
+           if (!d1) return 0;
+           const s1 = currentScores[targetId] || 0;
+           let adj = 0;
+           lineupIds.forEach(id2 => {
+             if (targetId === id2) return;
+             const d2 = debaters.find(deb => deb.id === id2);
+             if (!d2) return;
+             const s2 = currentScores[id2] || 0;
+
+             if (s1 > s2 && d1.price < d2.price) adj += 0.2;
+             if (s1 < s2 && d1.price > d2.price) adj -= 0.2;
+           });
+           return adj;
+         };
+
+         const oldAdj = calculateAdjustment(d.id, oldScores);
+         const newAdj = calculateAdjustment(d.id, newScores);
+         const priceDiff = newAdj - oldAdj;
+
+         if (scoreDiff !== 0 || priceDiff !== 0) {
+           const nextPrice = Math.max(1, d.price + priceDiff);
            batch.update(doc(db, 'debaters', d.id), {
-             totalPoints: increment(diff),
+             totalPoints: increment(scoreDiff),
              lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
-             price: Number(nextPrice.toFixed(1))
+             price: Number(nextPrice.toFixed(1)),
+             lastPriceChange: Number(newAdj.toFixed(1))
            });
          }
        }

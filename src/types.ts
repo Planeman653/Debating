@@ -5,6 +5,7 @@ export interface Debater {
   price: number;
   totalPoints: number;
   lastRoundPoints: number;
+  lastPriceChange?: number;
   bio?: string;
   imageUrl?: string;
 }

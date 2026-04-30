@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Debater } from '../types';
 import { formatCurrency, calculateLevel, cn } from '../lib/utils';
-import { Search, Trophy } from 'lucide-react';
+import { Search, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Rankings() {
@@ -133,6 +133,7 @@ export default function Rankings() {
                      <th className="px-6 py-4">Debater</th>
                      <th className="px-6 py-4 text-right">Last Rd</th>
                      <th className="px-6 py-4 text-right">Market Value</th>
+                     <th className="px-6 py-4 text-right">Price Chg</th>
                      <th className="px-6 py-4 text-right">Total Points</th>
                   </tr>
                </thead>
@@ -181,6 +182,19 @@ export default function Rankings() {
                            </td>
                            <td className="px-6 py-4 text-right font-mono font-bold text-slate-300">
                               {formatCurrency(d.price)}
+                           </td>
+                           <td className="px-6 py-4 text-right">
+                              {d.lastPriceChange !== undefined && d.lastPriceChange !== 0 ? (
+                                <div className={cn(
+                                   "inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-1 rounded-full",
+                                   d.lastPriceChange > 0 ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-red-500/10 text-red-500 border border-red-500/20"
+                                )}>
+                                   {d.lastPriceChange > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                   {Math.abs(d.lastPriceChange).toFixed(1)}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">—</span>
+                              )}
                            </td>
                            <td className="px-6 py-4 text-right">
                               <div className="inline-flex items-center justify-center bg-slate-950 border border-slate-800 rounded-lg px-3 py-1 text-sm font-mono font-black text-indigo-400 shadow-inner">
