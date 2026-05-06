@@ -70,6 +70,20 @@ export default function League() {
               </div>
               <h4 className="font-bold text-center mb-1 truncate w-full">{user.displayName}</h4>
               <p className="text-indigo-400 font-mono font-bold">{user.totalPoints} PTS</p>
+              {/* Podium rank indicators */}
+              <div className="flex items-center gap-1 mt-0.5">
+                {!user.previousRank || user.previousRank === (idx + 1) ? (
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">—</span>
+                ) : user.previousRank > (idx + 1) ? (
+                  <span className="text-[10px] font-black text-emerald-500 flex items-center gap-0.5" id={`rank-up-${user.uid}`}>
+                    <ChevronUp className="w-3 h-3" /> {user.previousRank - (idx + 1)} RANKS
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black text-red-500 flex items-center gap-0.5" id={`rank-down-${user.uid}`}>
+                    <ChevronDown className="w-3 h-3" /> {(idx + 1) - user.previousRank} RANKS
+                  </span>
+                )}
+              </div>
               <div className={cn(
                 "w-full bg-slate-900 border-x border-t border-slate-800 rounded-t-2xl mt-4",
                 idx === 0 ? "h-32" : idx === 1 ? "h-24" : "h-20"
@@ -104,12 +118,29 @@ export default function League() {
                       )}
                     >
                         <td className="px-6 py-4">
-                          <span className={cn(
-                            "font-mono font-bold",
-                            idx < 3 ? "text-indigo-400" : "text-slate-500"
-                          )}>
-                              #{idx + 1}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className={cn(
+                              "font-mono font-bold",
+                              idx < 3 ? "text-indigo-400" : "text-slate-500"
+                            )}>
+                                #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {!user.previousRank || user.previousRank === (idx + 1) ? (
+                                <span className="text-[10px] font-black text-slate-700 ml-1">—</span>
+                              ) : user.previousRank > (idx + 1) ? (
+                                <>
+                                  <ChevronUp className="w-3 h-3 text-emerald-500" />
+                                  <span className="text-[10px] font-black text-emerald-500">+{user.previousRank - (idx + 1)}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3 h-3 text-red-500" />
+                                  <span className="text-[10px] font-black text-red-500">-{ (idx + 1) - user.previousRank }</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-between">

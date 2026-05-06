@@ -44,4 +44,5 @@ export interface UserProfile {
   email: string;
   isAdmin: boolean;
   totalPoints: number;
+  previousRank?: number;
 }

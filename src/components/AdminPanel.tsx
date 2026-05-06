@@ -23,8 +23,8 @@ export default function AdminPanel() {
   useEffect(() => {
     const unsubD = onSnapshot(collection(db, 'debaters'), (s) => setDebaters(s.docs.map(d => ({id: d.id, ...d.data()} as Debater))));
     const unsubR = onSnapshot(query(collection(db, 'rounds'), orderBy('roundNumber', 'desc')), (s) => setRounds(s.docs.map(d => ({id: d.id, ...d.data()} as Round))));
-    const unsubU = onSnapshot(collection(db, 'users'), (s) => setUsers(s.docs.map(d => ({...d.data()} as UserProfile))));
-    const unsubT = onSnapshot(collection(db, 'teams'), (s) => setTeams(s.docs.map(d => ({...d.data()} as Team))));
+    const unsubU = onSnapshot(collection(db, 'users'), (s) => setUsers(s.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile))));
+    const unsubT = onSnapshot(collection(db, 'teams'), (s) => setTeams(s.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }))));
     const unsubS = onSnapshot(doc(db, 'state', 'lock'), (s) => {
       if (s.exists()) setState(s.data() as SystemState);
       else setState({ isLocked: false, currentRoundId: '', initialBudget: 50 });
@@ -94,6 +94,12 @@ export default function AdminPanel() {
       setIsProcessing(true);
       const batch = writeBatch(db);
       
+      // Update previousRank for all users to track movement
+      const sortedCurrentUsers = [...users].sort((a, b) => b.totalPoints - a.totalPoints);
+      sortedCurrentUsers.forEach((u, i) => {
+        batch.update(doc(db, 'users', u.uid), { previousRank: i + 1 });
+      });
+
       // Update round status
       batch.update(doc(db, 'rounds', round.id), { 
         status: 'completed',
