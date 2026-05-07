@@ -6,11 +6,11 @@
 import { useEffect, useState } from 'react';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, writeBatch } from 'firebase/firestore';
 import { Toaster, toast } from 'react-hot-toast';
 import { LayoutDashboard, Users, Trophy, History, ShieldAlert, LogIn, LogOut, Vote } from 'lucide-react';
-import { UserProfile, SystemState } from './types';
-import { cn } from './lib/utils';
+import { UserProfile, SystemState, Round } from './types';
+import { cn, shouldStartRound } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Pages
@@ -89,6 +89,45 @@ export default function App() {
         setSystemState({ isLocked: false, currentRoundId: '', initialBudget: 50 });
       }
     });
+    return () => unsub();
+  }, [user]);
+
+  // Auto-start rounds logic
+  useEffect(() => {
+    if (!user) return;
+    
+    const unsub = onSnapshot(collection(db, 'rounds'), async (snapshot) => {
+      const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Round));
+      const roundsToStart = rounds.filter(r => shouldStartRound(r));
+      
+      if (roundsToStart.length > 0) {
+        try {
+          const batch = writeBatch(db);
+          roundsToStart.forEach(round => {
+            // Mark as active
+            batch.update(doc(db, 'rounds', round.id), { status: 'active' });
+            
+            // If this is the earliest upcoming round, also update system state
+            const earliest = rounds
+              .filter(r => r.status === 'upcoming' || roundsToStart.find(rs => rs.id === r.id))
+              .sort((a,b) => a.roundNumber - b.roundNumber)[0];
+            
+            if (earliest && roundsToStart.find(rs => rs.id === earliest.id)) {
+               batch.set(doc(db, 'state', 'lock'), { 
+                currentRoundId: earliest.id,
+                lockMode: 'auto'
+              }, { merge: true });
+            }
+          });
+          
+          await batch.commit();
+          console.log('Automatically started rounds:', roundsToStart.map(r => r.roundNumber));
+        } catch (err) {
+          console.error('Auto-start fail:', err);
+        }
+      }
+    });
+    
     return () => unsub();
   }, [user]);
 

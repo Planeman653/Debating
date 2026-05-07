@@ -5,6 +5,7 @@ export interface Debater {
   price: number;
   totalPoints: number;
   lastRoundPoints: number;
+  lastScoredRoundNumber?: number;
   lastPriceChange?: number;
   bio?: string;
   imageUrl?: string;
@@ -45,4 +46,5 @@ export interface UserProfile {
   isAdmin: boolean;
   totalPoints: number;
   previousRank?: number;
+  lastScoredRoundNumber?: number;
 }

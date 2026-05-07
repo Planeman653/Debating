@@ -48,3 +48,8 @@ export function isAutoLocked(rounds: { roundNumber: number; deadline: string; st
   // Lock if deadline is within 30 minutes (or has already passed)
   return now >= (deadline - thirtyMinutes);
 }
+
+export function shouldStartRound(round: { deadline: string; status: string }) {
+  if (round.status !== 'upcoming') return false;
+  return new Date(round.deadline).getTime() <= Date.now();
+}

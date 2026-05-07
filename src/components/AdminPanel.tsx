@@ -125,7 +125,10 @@ export default function AdminPanel() {
       // Update previousRank for all users to track movement
       const sortedCurrentUsers = [...users].sort((a, b) => b.totalPoints - a.totalPoints);
       sortedCurrentUsers.forEach((u, i) => {
-        batch.update(doc(db, 'users', u.uid), { previousRank: i + 1 });
+        batch.update(doc(db, 'users', u.uid), { 
+          previousRank: i + 1,
+          lastScoredRoundNumber: round.roundNumber
+        });
       });
 
       // 1. Mark this specific round as completed
@@ -167,6 +170,7 @@ export default function AdminPanel() {
            batch.update(doc(db, 'debaters', id), {
              totalPoints: increment(scoreDiff),
              lastRoundPoints: score,
+             lastScoredRoundNumber: round.roundNumber,
              price: Number(nextPrice.toFixed(1)),
              lastPriceChange: Number(adjustment.toFixed(1))
            });
@@ -262,6 +266,7 @@ export default function AdminPanel() {
            batch.update(doc(db, 'debaters', d.id), {
              totalPoints: increment(scoreDiff),
              lastRoundPoints: newScore, // Update lastRoundPoints to reflected newly corrected score
+             lastScoredRoundNumber: round.roundNumber,
              price: Number(nextPrice.toFixed(1)),
              lastPriceChange: Number(newAdj.toFixed(1))
            });

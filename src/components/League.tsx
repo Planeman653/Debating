@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { UserProfile, Team, Debater } from '../types';
+import { UserProfile, Team, Debater, Round } from '../types';
 import { Trophy, Medal, Crown, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -10,6 +10,7 @@ export default function League() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [debaters, setDebaters] = useState<Debater[]>([]);
+  const [latestCompletedRoundNumber, setLatestCompletedRoundNumber] = useState<number>(0);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,7 +27,15 @@ export default function League() {
        setDebaters(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Debater)));
     });
 
-    return () => { unsubU(); unsubT(); unsubD(); };
+    const unsubR = onSnapshot(collection(db, 'rounds'), (snapshot) => {
+       const rs = snapshot.docs.map(doc => doc.data() as Round);
+       const completed = rs.filter(r => r.status === 'completed');
+       if (completed.length > 0) {
+         setLatestCompletedRoundNumber(Math.max(...completed.map(r => r.roundNumber)));
+       }
+    });
+
+    return () => { unsubU(); unsubT(); unsubD(); unsubR(); };
   }, []);
 
   return (
@@ -72,16 +81,20 @@ export default function League() {
               <p className="text-indigo-400 font-mono font-bold">{user.totalPoints} PTS</p>
               {/* Podium rank indicators */}
               <div className="flex items-center gap-1 mt-0.5">
-                {!user.previousRank || user.previousRank === (idx + 1) ? (
-                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">—</span>
-                ) : user.previousRank > (idx + 1) ? (
-                  <span className="text-[10px] font-black text-emerald-500 flex items-center gap-0.5" id={`rank-up-${user.uid}`}>
-                    <ChevronUp className="w-3 h-3" /> {user.previousRank - (idx + 1)} RANKS
-                  </span>
+                {(user.lastScoredRoundNumber === latestCompletedRoundNumber && latestCompletedRoundNumber > 0) ? (
+                  !user.previousRank || user.previousRank === (idx + 1) ? (
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">—</span>
+                  ) : user.previousRank > (idx + 1) ? (
+                    <span className="text-[10px] font-black text-emerald-500 flex items-center gap-0.5" id={`rank-up-${user.uid}`}>
+                      <ChevronUp className="w-3 h-3" /> {user.previousRank - (idx + 1)} RANKS
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black text-red-500 flex items-center gap-0.5" id={`rank-down-${user.uid}`}>
+                      <ChevronDown className="w-3 h-3" /> {(idx + 1) - user.previousRank} RANKS
+                    </span>
+                  )
                 ) : (
-                  <span className="text-[10px] font-black text-red-500 flex items-center gap-0.5" id={`rank-down-${user.uid}`}>
-                    <ChevronDown className="w-3 h-3" /> {(idx + 1) - user.previousRank} RANKS
-                  </span>
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">—</span>
                 )}
               </div>
               <div className={cn(
@@ -126,18 +139,22 @@ export default function League() {
                                 #{idx + 1}
                             </span>
                             <div className="flex items-center gap-1">
-                              {!user.previousRank || user.previousRank === (idx + 1) ? (
-                                <span className="text-[10px] font-black text-slate-700 ml-1">—</span>
-                              ) : user.previousRank > (idx + 1) ? (
-                                <>
-                                  <ChevronUp className="w-3 h-3 text-emerald-500" />
-                                  <span className="text-[10px] font-black text-emerald-500">+{user.previousRank - (idx + 1)}</span>
-                                </>
+                              {(user.lastScoredRoundNumber === latestCompletedRoundNumber && latestCompletedRoundNumber > 0) ? (
+                                !user.previousRank || user.previousRank === (idx + 1) ? (
+                                  <span className="text-[10px] font-black text-slate-700 ml-1">—</span>
+                                ) : user.previousRank > (idx + 1) ? (
+                                  <>
+                                    <ChevronUp className="w-3 h-3 text-emerald-500" />
+                                    <span className="text-[10px] font-black text-emerald-500">+{user.previousRank - (idx + 1)}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-3 h-3 text-red-500" />
+                                    <span className="text-[10px] font-black text-red-500">-{ (idx + 1) - user.previousRank }</span>
+                                  </>
+                                )
                               ) : (
-                                <>
-                                  <ChevronDown className="w-3 h-3 text-red-500" />
-                                  <span className="text-[10px] font-black text-red-500">-{ (idx + 1) - user.previousRank }</span>
-                                </>
+                                <span className="text-[10px] font-black text-slate-700 ml-1">—</span>
                               )}
                             </div>
                           </div>
@@ -179,7 +196,17 @@ export default function League() {
                                         <span className="text-[10px] text-slate-500">Team {debater.team}</span>
                                       </div>
                                       <div className="flex flex-col items-end">
-                                        <span className="text-[10px] font-mono text-indigo-400">{debater.totalPoints} PTS</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[10px] font-mono text-indigo-400">{debater.totalPoints} PTS</span>
+                                          {debater.lastScoredRoundNumber === latestCompletedRoundNumber && latestCompletedRoundNumber > 0 && debater.lastRoundPoints !== 0 && (
+                                            <span className={cn(
+                                              "text-[8px] font-black px-1 rounded",
+                                              debater.lastRoundPoints > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                                            )}>
+                                              {debater.lastRoundPoints > 0 ? '+' : ''}{debater.lastRoundPoints}
+                                            </span>
+                                          )}
+                                        </div>
                                         <span className="text-[10px] text-slate-600">${debater.price}</span>
                                       </div>
                                     </div>

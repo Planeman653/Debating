@@ -95,30 +95,62 @@ export default function Dashboard({ systemState }: DashboardProps) {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-indigo-600/10 border border-indigo-500/20 rounded-3xl p-6 md:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden group"
+              className={cn(
+                "bg-indigo-600/10 border rounded-3xl p-6 md:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden group",
+                currentRound.status === 'active' ? "border-emerald-500/30 bg-emerald-500/5" : "border-indigo-500/20"
+              )}
             >
+              {currentRound.status === 'active' && (
+                <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-white rounded-full shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Live</span>
+                </div>
+              )}
+              
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Timer className="w-24 md:w-32 h-24 md:h-32 rotate-12" />
+                {currentRound.status === 'active' ? (
+                   <Users className="w-24 md:w-32 h-24 md:h-32 rotate-12" />
+                ) : (
+                   <Timer className="w-24 md:w-32 h-24 md:h-32 rotate-12" />
+                )}
               </div>
               
-              <span className="text-indigo-400 font-bold mb-2 uppercase tracking-widest text-[10px] md:text-xs">Round {currentRound.roundNumber} Deadline</span>
+              <span className={cn(
+                "font-bold mb-2 uppercase tracking-widest text-[10px] md:text-xs",
+                currentRound.status === 'active' ? "text-emerald-400" : "text-indigo-400"
+              )}>
+                {currentRound.status === 'active' ? "DEBATE IN PROGRESS" : `Round ${currentRound.roundNumber} Deadline`}
+              </span>
               <h3 className="text-lg md:text-xl font-bold mb-6 px-2">{currentRound.topic}</h3>
 
-              <div className="flex gap-2 md:gap-4">
-                {[
-                  { label: 'Days', val: timeLeft?.d ?? 0 },
-                  { label: 'Hours', val: timeLeft?.h ?? 0 },
-                  { label: 'Mins', val: timeLeft?.m ?? 0 },
-                  { label: 'Secs', val: timeLeft?.s ?? 0 },
-                ].map((t) => (
-                  <div key={t.label} className="flex flex-col items-center">
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl w-14 md:w-16 h-14 md:h-16 flex items-center justify-center text-xl md:text-2xl font-black text-indigo-400 shadow-inner">
-                      {t.val.toString().padStart(2, '0')}
+              {currentRound.status === 'active' ? (
+                <div className="bg-slate-950/80 border border-emerald-500/20 backdrop-blur-sm rounded-2xl p-6 flex flex-col items-center gap-2">
+                   <div className="flex -space-x-4">
+                      {lineup.slice(0, 4).map((d, i) => (
+                        <div key={d.id} className="w-12 h-12 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden shadow-xl" style={{ zIndex: 10 - i }}>
+                           {d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs font-bold">{d.name[0]}</div>}
+                        </div>
+                      ))}
+                   </div>
+                   <p className="text-xs text-slate-400 font-medium mt-2">The arena is live. Market is locked.</p>
+                </div>
+              ) : (
+                <div className="flex gap-2 md:gap-4">
+                  {[
+                    { label: 'Days', val: timeLeft?.d ?? 0 },
+                    { label: 'Hours', val: timeLeft?.h ?? 0 },
+                    { label: 'Mins', val: timeLeft?.m ?? 0 },
+                    { label: 'Secs', val: timeLeft?.s ?? 0 },
+                  ].map((t) => (
+                    <div key={t.label} className="flex flex-col items-center">
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl w-14 md:w-16 h-14 md:h-16 flex items-center justify-center text-xl md:text-2xl font-black text-indigo-400 shadow-inner">
+                        {t.val.toString().padStart(2, '0')}
+                      </div>
+                      <span className="text-[8px] md:text-[10px] mt-2 text-slate-500 uppercase font-bold tracking-tighter">{t.label}</span>
                     </div>
-                    <span className="text-[8px] md:text-[10px] mt-2 text-slate-500 uppercase font-bold tracking-tighter">{t.label}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {isLocked && (
                 <div className="mt-8 flex items-center gap-2 text-amber-500 bg-amber-500/10 px-4 py-2 rounded-full border border-amber-500/20 text-xs font-bold uppercase tracking-wider">
