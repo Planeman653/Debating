@@ -20,26 +20,31 @@ export function calculateLevel(points: number) {
   return 1;
 }
 
-export function isAutoLocked(rounds: { deadline: string; status: string }[], state: { isLocked: boolean, lockMode?: 'auto' | 'manual-locked' | 'manual-unlocked' } | null) {
+export function isAutoLocked(rounds: { roundNumber: number; deadline: string; status: string }[], state: { isLocked: boolean, lockMode?: 'auto' | 'manual-locked' | 'manual-unlocked' } | null) {
   // Manual overrides first
   if (state?.lockMode === 'manual-locked') return true;
   if (state?.lockMode === 'manual-unlocked') return false;
   
-  // If no advanced lockMode, fallback to legacy isLocked (which basically acts as a manual toggle)
-  if (state && !state.lockMode && state.isLocked) return true;
+  // 1. If any round is 'active', the market is always locked (debate is ongoing)
+  if (rounds.some(r => r.status === 'active')) return true;
 
-  // Now check auto-lock if mode is 'auto' (or no mode but state exists)
-  // Usually default to auto unless manual-unlocked is set
-  const upcomingRounds = rounds.filter(r => r.status === 'upcoming');
-  if (upcomingRounds.length === 0) return false;
+  // 2. Find the earliest 'upcoming' round by roundNumber to determine today's lock
+  const upcomingSorted = rounds
+    .filter(r => r.status === 'upcoming')
+    .sort((a, b) => a.roundNumber - b.roundNumber);
 
-  const nextRound = upcomingRounds.sort((a, b) => 
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-  )[0];
+  if (upcomingSorted.length === 0) return false;
 
+  const nextRound = upcomingSorted[0];
   const deadline = new Date(nextRound.deadline).getTime();
   const now = new Date().getTime();
   const thirtyMinutes = 30 * 60 * 1000;
+  const sixHours = 6 * 60 * 60 * 1000;
 
-  return (deadline - thirtyMinutes) <= now;
+  // If the deadline is ancient (e.g. more than 6 hours ago) and not started, 
+  // assume it's a stale date and don't auto-lock.
+  if (now > (deadline + sixHours)) return false;
+
+  // Lock if deadline is within 30 minutes (or has already passed)
+  return now >= (deadline - thirtyMinutes);
 }

@@ -186,7 +186,7 @@ export default function Squad({ user, systemState, profile }: SquadProps) {
                           </div>
 
                           <button 
-                            disabled={systemState?.isLocked}
+                            disabled={isLocked}
                             onClick={() => removeFromSquad(debater)}
                             className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mb-4 md:mb-6"
                           >

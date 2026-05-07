@@ -89,6 +89,34 @@ export default function AdminPanel() {
     }
   };
 
+  const startRound = async (roundId: string) => {
+    try {
+      setIsProcessing(true);
+      const batch = writeBatch(db);
+      
+      // 1. Deactivate any existing active rounds to prevent "double lock"
+      rounds.filter(r => r.status === 'active').forEach(r => {
+        batch.update(doc(db, 'rounds', r.id), { status: 'completed' });
+      });
+
+      // 2. Mark this round as active
+      batch.update(doc(db, 'rounds', roundId), { status: 'active' });
+      
+      // 3. Update system state
+      batch.set(doc(db, 'state', 'lock'), { 
+        currentRoundId: roundId,
+        lockMode: 'auto'
+      }, { merge: true });
+      
+      await batch.commit();
+      toast.success('Round activated and squads tracking!');
+    } catch (err) {
+      toast.error('Failed to start round');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
    const pushResults = async (round: Round, scores: Record<string, number>) => {
     try {
       setIsProcessing(true);
@@ -100,16 +128,25 @@ export default function AdminPanel() {
         batch.update(doc(db, 'users', u.uid), { previousRank: i + 1 });
       });
 
-      // Update round status
+      // 1. Mark this specific round as completed
       batch.update(doc(db, 'rounds', round.id), { 
         status: 'completed',
         debaterScores: scores
       });
 
-       // Update debater total stats and prices
-       const lineupIds = round.selectedDebaterIds || [];
+      // 2. Clear any other "active" rounds just in case of overlaps
+      rounds.filter(r => r.status === 'active' && r.id !== round.id).forEach(r => {
+        batch.update(doc(db, 'rounds', r.id), { status: 'completed' });
+      });
+
+      // 4. Update lineup logic
+      const lineupIds = round.selectedDebaterIds || [];
+      const oldScores = round.debaterScores || {};
+
        for (const id of lineupIds) {
          const score = scores[id] || 0;
+         const oldScore = oldScores[id] || 0;
+         const scoreDiff = score - oldScore;
          const d1 = debaters.find(deb => deb.id === id);
          if (d1) {
            // New relative pricing logic:
@@ -128,7 +165,7 @@ export default function AdminPanel() {
 
            const nextPrice = Math.max(1, d1.price + adjustment);
            batch.update(doc(db, 'debaters', id), {
-             totalPoints: increment(score),
+             totalPoints: increment(scoreDiff),
              lastRoundPoints: score,
              price: Number(nextPrice.toFixed(1)),
              lastPriceChange: Number(adjustment.toFixed(1))
@@ -141,25 +178,31 @@ export default function AdminPanel() {
        const activeTeams = teamsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as Team & { uid: string }));
        
        for (const team of activeTeams) {
-         let teamRoundPoints = 0;
+         let teamRoundDiff = 0;
          team.debaterIds.forEach(id => {
            if (lineupIds.includes(id)) {
-             teamRoundPoints += (scores[id] || 0);
+             const sOld = oldScores[id] || 0;
+             const sNew = scores[id] || 0;
+             teamRoundDiff += (sNew - sOld);
            }
          });
  
-         if (teamRoundPoints !== 0) {
+         if (teamRoundDiff !== 0) {
           const userRef = doc(db, 'users', team.uid);
           batch.update(userRef, {
-            totalPoints: increment(teamRoundPoints)
+            totalPoints: increment(teamRoundDiff)
           });
         }
       }
 
-      // Unlock global state
+      // Unlock global state and move to next round reference if it exists
+      const nextRound = [...rounds]
+        .filter(r => (r.status === 'upcoming' || r.status === 'active') && r.id !== round.id)
+        .sort((a,b) => a.roundNumber - b.roundNumber)[0];
+
       batch.set(doc(db, 'state', 'lock'), { 
         isLocked: false, 
-        currentRoundId: '',
+        currentRoundId: nextRound?.id || '',
         lockMode: 'auto'
       }, { merge: true });
 
@@ -393,14 +436,30 @@ export default function AdminPanel() {
             })}
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 bg-slate-900/30 px-4 py-2 rounded-xl border border-white/5">
-             <div className={cn(
-               "w-2 h-2 rounded-full animate-pulse",
-               isAutoLocked(rounds, state) ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-             )} />
-             <span className="text-[10px] font-black uppercase tracking-widest opacity-70">
-                Effective: {isAutoLocked(rounds, state) ? 'Locked' : 'Open'}
-             </span>
+          <div className="hidden lg:flex flex-col items-center gap-1 bg-slate-900/30 px-4 py-2 rounded-xl border border-white/5">
+             <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-2 h-2 rounded-full animate-pulse",
+                  isAutoLocked(rounds, state) ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                )} />
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                   Market: {isAutoLocked(rounds, state) ? 'Locked' : 'Open'}
+                </span>
+             </div>
+             {isAutoLocked(rounds, state) && (
+               <span className="text-[8px] font-bold opacity-40 uppercase tracking-tighter">
+                 Reason: {
+                   state?.lockMode === 'manual-locked' ? 'MANUAL OVERRIDE' :
+                   rounds.find(r => r.status === 'active') ? `ROUND ${rounds.find(r => r.status === 'active')?.roundNumber} ONGOING` :
+                   (() => {
+                     const upcoming = rounds
+                       .filter(r => r.status === 'upcoming')
+                       .sort((a, b) => a.roundNumber - b.roundNumber)[0];
+                     return upcoming ? `ROUND ${upcoming.roundNumber} DEADLINE` : 'SYSTEM LOCK';
+                   })()
+                 }
+               </span>
+             )}
           </div>
 
           <button 
@@ -502,7 +561,7 @@ export default function AdminPanel() {
               </button>
               <div className="space-y-4">
                  {rounds.map(r => (
-                   <AdminRoundCard key={r.id} round={r} onPush={pushResults} onCorrect={correctResults} debaters={debaters} isProcessing={isProcessing} />
+                   <AdminRoundCard key={r.id} round={r} onPush={pushResults} onCorrect={correctResults} onStart={startRound} debaters={debaters} isProcessing={isProcessing} />
                  ))}
               </div>
            </div>
@@ -643,7 +702,7 @@ function AdminDebaterCard({ debater }: { debater: Debater, key?: string }) {
   );
 }
 
-function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { round: Round, onPush: (r: Round, s: Record<string, number>) => void, onCorrect: (r: Round, s: Record<string, number>) => void, debaters: Debater[], isProcessing: boolean, key?: string }) {
+function AdminRoundCard({ round, onPush, onCorrect, onStart, debaters, isProcessing }: { round: Round, onPush: (r: Round, s: Record<string, number>) => void, onCorrect: (r: Round, s: Record<string, number>) => void, onStart: (id: string) => void, debaters: Debater[], isProcessing: boolean, key?: string }) {
    const [scores, setScores] = useState<Record<string, number>>(round.debaterScores || {});
    const [topic, setTopic] = useState(round.topic);
    const [deadline, setDeadline] = useState(round.deadline);
@@ -688,6 +747,8 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
 
    // Only score selected debaters
    const lineupDebaters = debaters.filter(d => selectedDebaterIds.includes(d.id));
+   const expectedCount = byeTeam === 'None' ? 6 : 3;
+   const isLineupReady = lineupDebaters.length === expectedCount;
 
    const deleteRound = async () => {
       try {
@@ -705,6 +766,14 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
          <div className="flex justify-between items-center">
             <div className="flex gap-2 items-center">
                <span className="bg-indigo-600 text-[10px] font-black px-2 py-1 rounded">ROUND {round.roundNumber}</span>
+               {round.status === 'upcoming' && (
+                  <button 
+                    onClick={() => onStart(round.id)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-1 rounded transition-colors cursor-pointer"
+                  >
+                    START ROUND
+                  </button>
+               )}
                <button type="button" onClick={deleteRound} className="text-red-500 hover:text-red-400 cursor-pointer p-1 transition-colors"><Trash2 className="w-4 h-4" /></button>
             </div>
             <span className={cn(
@@ -806,7 +875,7 @@ function AdminRoundCard({ round, onPush, onCorrect, debaters, isProcessing }: { 
                )}
             </div>
             
-            {(round.status !== 'completed' && lineupDebaters.length === 6) ? (
+            {(round.status !== 'completed' && isLineupReady) ? (
               <button 
                 type="button"
                 disabled={isProcessing}

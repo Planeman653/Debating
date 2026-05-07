@@ -24,12 +24,18 @@ export default function Dashboard({ systemState }: DashboardProps) {
       const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Round));
       setAllRounds(rounds);
       
-      const activeOrUpcoming = rounds.filter(r => ['upcoming', 'active'].includes(r.status));
-      const sorted = activeOrUpcoming.sort((a, b) => a.roundNumber - b.roundNumber);
-      setCurrentRound(sorted[0] || null);
+      // Authoritative round from systemState if valid and not completed
+      const stateRound = rounds.find(r => r.id === systemState?.currentRoundId);
+      if (stateRound && (stateRound.status === 'active' || stateRound.status === 'upcoming')) {
+        setCurrentRound(stateRound);
+      } else {
+        const activeOrUpcoming = rounds.filter(r => ['upcoming', 'active'].includes(r.status));
+        const sorted = activeOrUpcoming.sort((a, b) => a.roundNumber - b.roundNumber);
+        setCurrentRound(sorted[0] || null);
+      }
     });
     return () => unsub();
-  }, []);
+  }, [systemState?.currentRoundId]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'debaters'), (snapshot) => {
