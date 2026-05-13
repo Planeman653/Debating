@@ -59,10 +59,10 @@ service cloud.firestore {
     }
 
     // --- Votes (Debater of the Day) ---
-    match /votes/{userId} {
+    match /votes/{voteId} {
       allow read: if true;
       allow create, update: if isSignedIn() 
-        && request.auth.uid == userId 
+        && voteId == request.auth.uid + "_" + (incoming().get('roundId', ''))
         && get(/databases/$(database)/documents/state/lock).data.get('isVotingOpen', false) == true
         && incoming().debaterId is string;
       allow delete: if isAdmin();

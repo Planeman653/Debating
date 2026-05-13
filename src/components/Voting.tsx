@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, doc, setDoc, onSnapshot, query } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { Debater, SystemState, Round } from '../types';
 import { Vote, Star, CheckCircle2, Trophy, User, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,19 +30,35 @@ export default function Voting({ user, systemState }: VotingProps) {
       const rounds = snap.docs.map(d => ({ id: d.id, ...d.data() } as Round));
       const activeOrUpcoming = rounds.filter(r => ['upcoming', 'active'].includes(r.status));
       const sorted = activeOrUpcoming.sort((a, b) => a.roundNumber - b.roundNumber);
-      setActiveRound(sorted[0] || null);
+      const current = sorted[0] || null;
+      setActiveRound(current);
     });
 
-    // Listen for my vote
-    const unsubV = onSnapshot(doc(db, 'votes', user.uid), (snap) => {
-      if (snap.exists()) setMyVote(snap.data().debaterId);
+    return () => {
+      unsubD();
+      unsubR();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeRound || !user) {
+      setMyVote(null);
+      setVoteCounts({});
+      setLoading(false);
+      return;
+    }
+
+    // Listen for my vote for THIS round
+    const unsubV = onSnapshot(doc(db, 'votes', `${user.uid}_${activeRound.id}`), (vSnap) => {
+      if (vSnap.exists()) setMyVote(vSnap.data().debaterId);
       else setMyVote(null);
     });
 
-    // Listen for all votes to calculate results
-    const unsubAllV = onSnapshot(collection(db, 'votes'), (snap) => {
+    // Listen for all votes for THIS round
+    const votesQuery = query(collection(db, 'votes'), where('roundId', '==', activeRound.id));
+    const unsubAllV = onSnapshot(votesQuery, (allSnap) => {
       const counts: Record<string, number> = {};
-      snap.docs.forEach(doc => {
+      allSnap.docs.forEach(doc => {
         const { debaterId } = doc.data();
         counts[debaterId] = (counts[debaterId] || 0) + 1;
       });
@@ -51,18 +67,20 @@ export default function Voting({ user, systemState }: VotingProps) {
     });
 
     return () => {
-      unsubD();
-      unsubR();
       unsubV();
       unsubAllV();
     };
-  }, [user.uid]);
+  }, [activeRound?.id, user?.uid]);
 
   const castVote = async (debaterId: string) => {
     if (!systemState?.isVotingOpen) return toast.error('Voting is currently closed.');
+    if (!activeRound) return toast.error('No active round found.');
+    
     try {
-      await setDoc(doc(db, 'votes', user.uid), {
+      await setDoc(doc(db, 'votes', `${user.uid}_${activeRound.id}`), {
         debaterId,
+        roundId: activeRound.id,
+        userId: user.uid,
         voterName: user.displayName,
         timestamp: new Date().toISOString()
       });
